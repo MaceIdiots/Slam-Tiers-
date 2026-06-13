@@ -196,56 +196,80 @@ app.get('/api/leaderboard', async (req, res) => {
   const normalizedMode = mode.trim().toLowerCase();
 
   try {
-    const playersSnapshot = await db.collection('players').get();
-    const allPlayersDocs: any[] = [];
+    const HISTORICAL_ROSTER = [
+      { id: "fagzy_noah", mode: "mace", tier: "LT4", points: 8, weight: 8 },
+      { id: "adiaytz", mode: "nethpot", tier: "LT4", points: 8, weight: 8 },
+      { id: "ElevenDragon_", mode: "smp", tier: "HT4", points: 12, weight: 7 },
+      { id: "Vielaz", mode: "sword", tier: "LT3", points: 15, weight: 6 },
+      { id: "Noob", mode: "mace", tier: "LT5", points: 2, weight: 10 },
+      { id: "XenonBladez", mode: "diapot", tier: "LT4", points: 8, weight: 8 },
+      { id: "OnlyMortal", mode: "diapot", tier: "LT3", points: 15, weight: 6 },
+      { id: "RealMADDY_9157", mode: "smp", tier: "LT4", points: 8, weight: 8 },
+      { id: "just._.shuffled", mode: "mace", tier: "LT4", points: 8, weight: 8 },
+      { id: "Greeb", mode: "sword", tier: "LT4", points: 8, weight: 8 },
+      { id: "DiabloSentex", mode: "mace", tier: "HT5", points: 5, weight: 9 },
+      { id: "LamM2sz1uai", mode: "sword", tier: "LT3", points: 15, weight: 6 },
+      { id: "Zorxk._", mode: "diapot", tier: "LT3", points: 15, weight: 6 },
+      { id: "Anish_CR7", mode: "sword", tier: "LT4", points: 8, weight: 8 },
+      { id: "spawnquy1", mode: "sword", tier: "LT3", points: 15, weight: 6 },
+      { id: "xadvancedTT", mode: "mace", tier: "HT4", points: 12, weight: 7 },
+      { id: "Midnight_amura", mode: "mace", tier: "LT4", points: 8, weight: 8 },
+      { id: "Void", mode: "mace", tier: "LT2", points: 25, weight: 4 },
+      { id: "Kris_CS", mode: "mace", tier: "LT2", points: 25, weight: 4 }
+    ];
 
-    if (playersSnapshot.empty) {
-      const HISTORICAL_ROSTER = [
-        { id: "fagzy_noah", mode: "mace", tier: "LT4", points: 8, weight: 8 },
-        { id: "adiaytz", mode: "nethpot", tier: "LT4", points: 8, weight: 8 },
-        { id: "ElevenDragon_", mode: "smp", tier: "HT4", points: 12, weight: 7 },
-        { id: "Vielaz", mode: "sword", tier: "LT3", points: 15, weight: 6 },
-        { id: "Noob", mode: "mace", tier: "LT5", points: 2, weight: 10 },
-        { id: "XenonBladez", mode: "diapot", tier: "LT4", points: 8, weight: 8 },
-        { id: "OnlyMortal", mode: "diapot", tier: "LT3", points: 15, weight: 6 },
-        { id: "RealMADDY_9157", mode: "smp", tier: "LT4", points: 8, weight: 8 },
-        { id: "just._.shuffled", mode: "mace", tier: "LT4", points: 8, weight: 8 },
-        { id: "Greeb", mode: "sword", tier: "LT4", points: 8, weight: 8 },
-        { id: "DiabloSentex", mode: "mace", tier: "HT5", points: 5, weight: 9 },
-        { id: "LamM2sz1uai", mode: "sword", tier: "LT3", points: 15, weight: 6 },
-        { id: "Zorxk._", mode: "diapot", tier: "LT3", points: 15, weight: 6 },
-        { id: "Anish_CR7", mode: "sword", tier: "LT4", points: 8, weight: 8 },
-        { id: "spawnquy1", mode: "sword", tier: "LT3", points: 15, weight: 6 },
-        { id: "xadvancedTT", mode: "mace", tier: "HT4", points: 12, weight: 7 },
-        { id: "Midnight_amura", mode: "mace", tier: "LT4", points: 8, weight: 8 },
-        { id: "Void", mode: "mace", tier: "LT2", points: 25, weight: 4 },
-        { id: "Kris_CS", mode: "mace", tier: "LT2", points: 25, weight: 4 }
-      ];
+    const playerMap = new Map<string, any>();
 
-      for (const p of HISTORICAL_ROSTER) {
-        allPlayersDocs.push({
-          id: p.id,
-          discordId: p.id,
-          username: p.id,
-          avatarUrl: null,
-          gamemodes: {
-            [p.mode]: {
-              tier: p.tier,
-              points: p.points,
-              tierWeight: p.weight,
-              updatedAt: new Date()
-            }
+    // Seed the map with HISTORICAL_ROSTER
+    for (const p of HISTORICAL_ROSTER) {
+      playerMap.set(p.id, {
+        id: p.id,
+        discordId: p.id,
+        username: p.id,
+        avatarUrl: null,
+        gamemodes: {
+          [p.mode]: {
+            tier: p.tier,
+            points: p.points,
+            tierWeight: p.weight,
+            updatedAt: new Date()
           }
-        });
-      }
-    } else {
-      playersSnapshot.forEach(doc => {
-        allPlayersDocs.push({
-          id: doc.id,
-          ...doc.data()
-        });
+        }
       });
     }
+
+    // Attempt to merge live database content
+    try {
+      if (db) {
+        const playersSnapshot = await db.collection('players').get();
+        if (!playersSnapshot.empty) {
+          playersSnapshot.forEach(doc => {
+            const docData = doc.data();
+            const pId = doc.id;
+            if (playerMap.has(pId)) {
+              const existing = playerMap.get(pId);
+              playerMap.set(pId, {
+                ...existing,
+                ...docData,
+                gamemodes: {
+                  ...existing.gamemodes,
+                  ...(docData.gamemodes || {})
+                }
+              });
+            } else {
+              playerMap.set(pId, {
+                id: pId,
+                ...docData
+              });
+            }
+          });
+        }
+      }
+    } catch (dbError) {
+      console.error("Firestore DB query failed, falling back to local historical roster:", dbError);
+    }
+
+    const allPlayersDocs = Array.from(playerMap.values());
 
     if (normalizedMode === 'overall') {
       const results = allPlayersDocs.map(player => {

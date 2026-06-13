@@ -355,8 +355,13 @@ export function LeaderboardSection() {
                             key={player.discordId}
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: idx * 0.04 }}
-                            className={`border-b border-zinc-900/60 ${rowBg}`}
+                            whileHover={{ scale: 1.006, x: 4 }}
+                            transition={{ 
+                              x: { type: "spring", stiffness: 400, damping: 25 },
+                              scale: { type: "spring", stiffness: 400, damping: 25 },
+                              default: { delay: idx * 0.04 }
+                            }}
+                            className={`border-b border-zinc-900/60 ${rowBg} cursor-pointer origin-left`}
                           >
                             {/* Rank Indicator */}
                             <td className="py-4.5 px-6 text-center">
