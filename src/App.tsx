@@ -2,6 +2,7 @@ import { AmbientBackground } from './components/AmbientBackground';
 import { HeroSection } from './components/HeroSection';
 import { FeaturesSection } from './components/FeaturesSection';
 import { WhyJoinSection } from './components/WhyJoinSection';
+import { LeaderboardSection } from './components/LeaderboardSection';
 import { Footer } from './components/Footer';
 
 export default function App() {
@@ -11,6 +12,7 @@ export default function App() {
       <HeroSection />
       <FeaturesSection />
       <WhyJoinSection />
+      <LeaderboardSection />
       <Footer />
     </main>
   );
