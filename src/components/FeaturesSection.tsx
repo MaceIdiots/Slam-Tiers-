@@ -74,7 +74,14 @@ export function FeaturesSection() {
               <motion.div
                 key={i}
                 variants={itemVariants}
-                className="group relative p-[1px] rounded-2xl bg-gradient-to-b from-zinc-800 to-zinc-900 border border-zinc-800 hover:border-purple-500/50 transition-colors duration-300 overflow-hidden"
+                whileHover={{
+                  y: -8,
+                  scale: 1.025,
+                  boxShadow: "0 20px 40px -15px rgba(168, 85, 247, 0.3)",
+                }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: "spring", stiffness: 350, damping: 25 }}
+                className="group relative p-[1px] rounded-2xl bg-gradient-to-b from-zinc-800 to-zinc-900 border border-zinc-800 hover:border-purple-500/50 transition-colors duration-300 overflow-hidden cursor-pointer"
               >
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 <div className="relative h-full bg-surface-card bg-zinc-900/80 backdrop-blur-xl p-8 rounded-2xl flex flex-col items-start text-left">

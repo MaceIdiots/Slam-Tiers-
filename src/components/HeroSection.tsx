@@ -3,7 +3,11 @@ import { Swords } from "lucide-react";
 import { DiscordIcon } from "./DiscordIcon";
 import { DISCORD_LINK } from "../config";
 
-export function HeroSection() {
+interface HeroSectionProps {
+  onNavigateLeaderboard?: () => void;
+}
+
+export function HeroSection({ onNavigateLeaderboard }: HeroSectionProps) {
   return (
     <section className="relative min-h-[90vh] flex flex-col items-center justify-center text-center px-4 pt-20">
       <motion.div
@@ -33,21 +37,36 @@ export function HeroSection() {
           Where true Minecraft skills get measured. Join a competitive but controlled environment featuring fair tests, a custom bot, and a thriving community.
         </p>
 
-        <motion.div
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          <a
-            href={DISCORD_LINK}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group relative inline-flex items-center gap-3 bg-white text-zinc-950 px-8 py-4 rounded-xl font-bold text-lg overflow-hidden transition-all hover:bg-zinc-200"
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <motion.div
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.96 }}
           >
-            <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-purple-500/0 via-purple-500/20 to-purple-500/0 transform -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out" />
-            <DiscordIcon className="w-6 h-6 text-[#5865F2]" />
-            Join Now
-          </a>
-        </motion.div>
+            <a
+              href={DISCORD_LINK}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group relative inline-flex items-center gap-3 bg-[#5865F2] hover:bg-[#4752C4] text-white px-8 py-4 rounded-xl font-bold text-lg overflow-hidden transition-all shadow-[0_4px_24px_rgba(88,101,242,0.25)] hover:shadow-[0_4px_30px_rgba(88,101,242,0.4)]"
+            >
+              <DiscordIcon className="w-6 h-6 text-white" />
+              Join Now
+            </a>
+          </motion.div>
+
+          {onNavigateLeaderboard && (
+            <motion.div
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+            >
+              <button
+                onClick={onNavigateLeaderboard}
+                className="inline-flex items-center gap-2 px-8 py-4 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-100 border border-zinc-750 hover:border-zinc-600 rounded-xl font-bold text-lg transition-all shadow-md cursor-pointer"
+              >
+                <span>View Standings</span>
+              </button>
+            </motion.div>
+          )}
+        </div>
       </motion.div>
     </section>
   );

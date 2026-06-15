@@ -47,7 +47,7 @@ const VALID_GAMEMODES = new Set([
 
 // Static points mapped from tiers for calculating the Overall Leaderboard
 const TIER_POINTS: Record<string, number> = {
-  'HT1': 50, 'LT1': 40,
+  'HT1': 60, 'LT1': 40,
   'HT2': 30, 'LT2': 25,
   'HT3': 20, 'LT3': 15,
   'HT4': 12, 'LT4': 8,
@@ -185,7 +185,107 @@ app.post(ROLES_POST_PATHS, async (req, res) => {
   }
 });
 
-// 2. GET route for dynamic leaderboards
+// 2. GET route for single player search (case-insensitive username/id check)
+app.get('/api/player', async (req, res) => {
+  const { username } = req.query;
+
+  if (!username || typeof username !== 'string') {
+    return res.status(400).json({ error: 'Bad Request: Missing required query parameter "username"' });
+  }
+
+  const searchName = username.trim().toLowerCase();
+
+  try {
+    const HISTORICAL_ROSTER: any[] = [];
+
+    const playerMap = new Map<string, any>();
+
+    // Seed the map with HISTORICAL_ROSTER by merging modes
+    for (const p of HISTORICAL_ROSTER) {
+      if (!playerMap.has(p.id)) {
+        playerMap.set(p.id, {
+          id: p.id,
+          discordId: p.id,
+          username: p.id,
+          avatarUrl: null,
+          gamemodes: {}
+        });
+      }
+      const existing = playerMap.get(p.id);
+      existing.gamemodes[p.mode] = {
+        tier: p.tier,
+        points: p.points,
+        tierWeight: p.weight,
+        updatedAt: new Date()
+      };
+    }
+
+    // Try to merge live database content
+    try {
+      if (db) {
+        const playersSnapshot = await db.collection('players').get();
+        if (!playersSnapshot.empty) {
+          playersSnapshot.forEach(doc => {
+            const docData = doc.data();
+            const pId = doc.id;
+            if (playerMap.has(pId)) {
+              const existing = playerMap.get(pId);
+              playerMap.set(pId, {
+                ...existing,
+                ...docData,
+                gamemodes: {
+                  ...existing.gamemodes,
+                  ...(docData.gamemodes || {})
+                }
+              });
+            } else {
+              playerMap.set(pId, {
+                id: pId,
+                ...docData
+              });
+            }
+          });
+        }
+      }
+    } catch (dbError) {
+      console.error("Firestore DB query failed during player search, using historical roster:", dbError);
+    }
+
+    const allPlayersDocs = Array.from(playerMap.values());
+    const matchedPlayer = allPlayersDocs.find(
+      p => p.username?.trim().toLowerCase() === searchName || p.id?.trim().toLowerCase() === searchName
+    );
+
+    if (!matchedPlayer) {
+      return res.status(404).json({ success: false, error: 'Player not found' });
+    }
+
+    // Also calculate overall points to show in search as well
+    let calculatedOverallPoints = 0;
+    const VALID_GAME_MODES_KEYS = ['mace', 'sword', 'diapot', 'nethpot', 'smp', 'builduhc', 'axe', 'crystal'];
+    for (const gm of VALID_GAME_MODES_KEYS) {
+      const gmData = matchedPlayer.gamemodes && matchedPlayer.gamemodes[gm];
+      if (gmData) {
+        const pts = gmData.points !== undefined ? Number(gmData.points) : getPointsFromTier(gmData.tier);
+        calculatedOverallPoints += pts;
+      }
+    }
+
+    matchedPlayer.overallPoints = calculatedOverallPoints;
+    matchedPlayer.achievementTitle = getAchievementTitle(calculatedOverallPoints);
+
+    return res.status(200).json({
+      success: true,
+      player: matchedPlayer
+    });
+
+  } catch (error: any) {
+    console.error(`Error searching player [${username}]:`, error);
+    return res.status(500).json({ error: `Internal Server Error: ${error.message}` });
+  }
+});
+
+// 3. GET route for dynamic leaderboards
 app.get('/api/leaderboard', async (req, res) => {
   const { mode } = req.query;
 
@@ -196,46 +296,28 @@ app.get('/api/leaderboard', async (req, res) => {
   const normalizedMode = mode.trim().toLowerCase();
 
   try {
-    const HISTORICAL_ROSTER = [
-      { id: "fagzy_noah", mode: "mace", tier: "LT4", points: 8, weight: 8 },
-      { id: "adiaytz", mode: "nethpot", tier: "LT4", points: 8, weight: 8 },
-      { id: "ElevenDragon_", mode: "smp", tier: "HT4", points: 12, weight: 7 },
-      { id: "Vielaz", mode: "sword", tier: "LT3", points: 15, weight: 6 },
-      { id: "Noob", mode: "mace", tier: "LT5", points: 2, weight: 10 },
-      { id: "XenonBladez", mode: "diapot", tier: "LT4", points: 8, weight: 8 },
-      { id: "OnlyMortal", mode: "diapot", tier: "LT3", points: 15, weight: 6 },
-      { id: "RealMADDY_9157", mode: "smp", tier: "LT4", points: 8, weight: 8 },
-      { id: "just._.shuffled", mode: "mace", tier: "LT4", points: 8, weight: 8 },
-      { id: "Greeb", mode: "sword", tier: "LT4", points: 8, weight: 8 },
-      { id: "DiabloSentex", mode: "mace", tier: "HT5", points: 5, weight: 9 },
-      { id: "LamM2sz1uai", mode: "sword", tier: "LT3", points: 15, weight: 6 },
-      { id: "Zorxk._", mode: "diapot", tier: "LT3", points: 15, weight: 6 },
-      { id: "Anish_CR7", mode: "sword", tier: "LT4", points: 8, weight: 8 },
-      { id: "spawnquy1", mode: "sword", tier: "LT3", points: 15, weight: 6 },
-      { id: "xadvancedTT", mode: "mace", tier: "HT4", points: 12, weight: 7 },
-      { id: "Midnight_amura", mode: "mace", tier: "LT4", points: 8, weight: 8 },
-      { id: "Void", mode: "mace", tier: "LT2", points: 25, weight: 4 },
-      { id: "Kris_CS", mode: "mace", tier: "LT2", points: 25, weight: 4 }
-    ];
+    const HISTORICAL_ROSTER: any[] = [];
 
     const playerMap = new Map<string, any>();
 
-    // Seed the map with HISTORICAL_ROSTER
+    // Seed the map with HISTORICAL_ROSTER by merging modes
     for (const p of HISTORICAL_ROSTER) {
-      playerMap.set(p.id, {
-        id: p.id,
-        discordId: p.id,
-        username: p.id,
-        avatarUrl: null,
-        gamemodes: {
-          [p.mode]: {
-            tier: p.tier,
-            points: p.points,
-            tierWeight: p.weight,
-            updatedAt: new Date()
-          }
-        }
-      });
+      if (!playerMap.has(p.id)) {
+        playerMap.set(p.id, {
+          id: p.id,
+          discordId: p.id,
+          username: p.id,
+          avatarUrl: null,
+          gamemodes: {}
+        });
+      }
+      const existing = playerMap.get(p.id);
+      existing.gamemodes[p.mode] = {
+        tier: p.tier,
+        points: p.points,
+        tierWeight: p.weight,
+        updatedAt: new Date()
+      };
     }
 
     // Attempt to merge live database content
@@ -278,13 +360,12 @@ app.get('/api/leaderboard', async (req, res) => {
 
         for (const gm of VALID_GAMEMODES) {
           const gmData = player.gamemodes && player.gamemodes[gm];
-          const tier = gmData ? gmData.tier : 'NONE';
-          const pointsAwarded = getPointsFromTier(tier);
-          totalPoints += pointsAwarded;
+          const pts = gmData ? (gmData.points !== undefined ? Number(gmData.points) : getPointsFromTier(gmData.tier)) : 0;
+          totalPoints += pts;
 
           breakdown[gm] = {
-            tier,
-            points: pointsAwarded
+            tier: gmData ? gmData.tier : 'NONE',
+            points: pts
           };
         }
 
@@ -300,13 +381,12 @@ app.get('/api/leaderboard', async (req, res) => {
 
       // Sort descending by overall XP/points
       results.sort((a, b) => b.totalPoints - a.totalPoints);
-      const top10 = results.slice(0, 10);
 
       return res.status(200).json({
         success: true,
         mode: 'overall',
-        length: top10.length,
-        leaderboard: top10
+        length: results.length,
+        leaderboard: results
       });
 
     } else {
@@ -348,13 +428,11 @@ app.get('/api/leaderboard', async (req, res) => {
         return b.points - a.points;
       });
 
-      const top10 = filteredPlayers.slice(0, 10);
-
       return res.status(200).json({
         success: true,
         mode: normalizedMode,
-        length: top10.length,
-        leaderboard: top10
+        length: filteredPlayers.length,
+        leaderboard: filteredPlayers
       });
     }
 
