@@ -808,17 +808,29 @@ export function LeaderboardSection() {
                             {paginatedData.map((player, idx) => {
                               const rank = startIndex + idx + 1;
                               let rankStyle = "text-zinc-400 font-mono";
-                              let rowBg = "border-l-2 border-transparent hover:bg-zinc-800/10 transition-colors";
-                              
+                              let rowBg = "border-l-3 border-transparent hover:bg-purple-500/5 transition-all duration-300";
+                              let hoverBgColor = "rgba(168, 85, 247, 0.08)";
+                              let hoverBorderColor = "rgba(168, 85, 247, 0.7)";
+                              let hoverShadow = "0 8px 24px -4px rgba(168, 85, 247, 0.12), inset 0 0 16px 1px rgba(168, 85, 247, 0.04)";
+
                               if (rank === 1) {
                                 rankStyle = "text-amber-100 font-extrabold bg-gradient-to-b from-amber-500/25 to-amber-600/10 rounded-lg py-1 px-3 border border-amber-400/60 text-center shadow-[0_0_16px_rgba(245,158,11,0.45)]";
-                                rowBg = "bg-amber-500/5 hover:bg-amber-500/10 border-l-2 border-amber-500 shadow-[inset_0_0_24px_rgba(245,158,11,0.06),0_0_20px_rgba(245,158,11,0.08)] transition-all duration-200";
+                                rowBg = "bg-amber-500/5 border-l-3 border-amber-500 shadow-[inset_0_0_24px_rgba(245,158,11,0.04),0_0_20px_rgba(245,158,11,0.05)] transition-all duration-300";
+                                hoverBgColor = "rgba(245, 158, 11, 0.12)";
+                                hoverBorderColor = "rgba(245, 158, 11, 0.9)";
+                                hoverShadow = "0 8px 28px -4px rgba(245, 158, 11, 0.20), inset 0 0 20px 1px rgba(245, 158, 11, 0.10)";
                               } else if (rank === 2) {
                                 rankStyle = "text-zinc-50 font-bold bg-gradient-to-b from-zinc-400/25 to-zinc-500/10 rounded-lg py-1 px-3 border border-zinc-300/60 text-center shadow-[0_0_16px_rgba(168,168,168,0.35)]";
-                                rowBg = "bg-zinc-450/4 hover:bg-zinc-400/8 border-l-2 border-zinc-400 shadow-[inset_0_0_20px_rgba(255,255,255,0.03),0_0_15px_rgba(168,168,168,0.05)] transition-all duration-200";
+                                rowBg = "bg-zinc-500/4 border-l-3 border-zinc-400 shadow-[inset_0_0_20px_rgba(255,255,255,0.02),0_0_15px_rgba(168,168,168,0.03)] transition-all duration-300";
+                                hoverBgColor = "rgba(161, 161, 170, 0.10)";
+                                hoverBorderColor = "rgba(161, 161, 170, 0.8)";
+                                hoverShadow = "0 8px 24px -4px rgba(161, 161, 170, 0.15), inset 0 0 18px 1px rgba(161, 161, 170, 0.08)";
                               } else if (rank === 3) {
                                 rankStyle = "text-amber-200 font-bold bg-gradient-to-b from-amber-800/25 to-amber-900/10 rounded-lg py-1 px-3 border border-amber-700/60 text-center shadow-[0_0_16px_rgba(180,83,9,0.35)]";
-                                rowBg = "bg-amber-800/4 hover:bg-amber-800/8 border-l-2 border-amber-600 shadow-[inset_0_0_20px_rgba(180,83,9,0.02),0_0_15px_rgba(180,83,9,0.04)] transition-all duration-200";
+                                rowBg = "bg-amber-800/4 border-l-3 border-amber-600 shadow-[inset_0_0_20px_rgba(180,83,9,0.01),0_0_15px_rgba(180,83,9,0.02)] transition-all duration-300";
+                                hoverBgColor = "rgba(180, 83, 9, 0.10)";
+                                hoverBorderColor = "rgba(180, 83, 9, 0.8)";
+                                hoverShadow = "0 8px 24px -4px rgba(180, 83, 9, 0.15), inset 0 0 18px 1px rgba(180, 83, 9, 0.08)";
                               }
 
                               return (
@@ -827,10 +839,19 @@ export function LeaderboardSection() {
                                   onClick={() => handleInspectPlayer(player.username)}
                                   initial={{ opacity: 0, x: -10 }}
                                   animate={{ opacity: 1, x: 0 }}
-                                  whileHover={{ scale: 1.006, x: 4 }}
+                                  whileHover={{ 
+                                    scale: 1.01, 
+                                    x: 6,
+                                    backgroundColor: hoverBgColor,
+                                    borderLeftColor: hoverBorderColor,
+                                    boxShadow: hoverShadow
+                                  }}
                                   transition={{ 
-                                      x: { type: "spring", stiffness: 400, damping: 25 },
-                                      scale: { type: "spring", stiffness: 400, damping: 25 },
+                                      x: { type: "spring", stiffness: 350, damping: 25 },
+                                      scale: { type: "spring", stiffness: 350, damping: 25 },
+                                      backgroundColor: { duration: 0.2 },
+                                      borderLeftColor: { duration: 0.2 },
+                                      boxShadow: { duration: 0.2 },
                                       default: { delay: idx * 0.04 }
                                   }}
                                   className={`border-b border-zinc-900/60 ${rowBg} cursor-pointer origin-left`}
