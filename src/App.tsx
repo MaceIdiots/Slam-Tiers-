@@ -7,8 +7,6 @@ import { WhyJoinSection } from "./components/WhyJoinSection";
 import { LeaderboardSection } from "./components/LeaderboardSection";
 import { Footer } from "./components/Footer";
 import { Trophy, Swords, Home } from "lucide-react";
-// @ts-ignore
-import logoImg from "./assets/logo.jpg";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<"intro" | "leaderboard">("intro");
@@ -31,13 +29,8 @@ export default function App() {
             onClick={() => setActiveTab("intro")}
             className="flex items-center gap-2.5 cursor-pointer group"
           >
-            <div className="w-9 h-9 rounded-xl overflow-hidden border border-purple-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)] transition-transform duration-300 group-hover:scale-105 group-hover:rotate-3">
-              <img 
-                src={logoImg} 
-                alt="SlamTiers Logo" 
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-              />
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 to-fuchsia-500 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)] transition-transform duration-300 group-hover:scale-105 group-hover:rotate-3">
+              <Swords className="w-5 h-5 text-white" />
             </div>
             <span className="font-display font-black text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-400 select-none">
               Slam<span className="text-purple-400">Tiers</span>
