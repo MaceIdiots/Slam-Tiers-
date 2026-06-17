@@ -12,26 +12,29 @@ const PORT = 3000;
 app.use(express.json());
 
 // Initialize Firebase Admin safely with the specified live credentials
-let db: Firestore;
+let db: Firestore | null = null;
 
-if (!getApps().length) {
-  const projectId = process.env.FIREBASE_PROJECT_ID || "slam-tiers-leaderboard";
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || "firebase-adminsdk-fbsvc@slam-tiers-leaderboard.iam.gserviceaccount.com";
-  
-  const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY || "-----BEGIN PRIVATE KEY-----\nMIIEuwIBADANBgkqhkiG9w0BAQEFAASCBKUwggShAgEAAoIBAQCpAHvneoiq1a0R\nejzOuNCWi1jgGXInTkLzI0spsE8zp8KR/jxM+8tMow1kdnP8mZB8tUgGQPT/jlON\nwWOgb/AMm7AV6/yJl5yWHQOEpsgAnw3cs4O7QjZcjaPAEz7VOoDlzt0Jla+8mTXL\nDP2qFpAUuIgVAToZ6aRhsXPor6zK0hU+vig1zfhZjaUF65ealwa53SoeVxTj3bgW\nqeIurkiZUTujs3l8srjwPVVfN/votcRmykCxmIlYWpSacSj7HgkloqFR4+hpqDRZ\nxToFmNjv6reAyq24Nz7+R39YbUFcoDTpYx46w43j5OFS0r2qTBhbUTgCR7N5c7Jg\nY+rzRLzRAgMBAAECgf9FN0asbk50KUGtNs6Z5PebZ43BKGGoacLhzR4ZSXWUa4fH\nGjIvFWfwdHK3uXmVPVjbTNqVEIoihQXclF7JT+qVY+4zefokICiogCvS/QTfKfw8\nk1JZoat45bd7NYs2YEZ4IaNqUGHCcQaChUixQwfWdLQ0+GTRITj4wNcjbr19Eznj\n23Tmpcg3EVTXfpDNz9HLZUgzCcXEahxPCZPRj50OZVHP8yHHQYT1cp9C99tRDjUi\nEqxG7h/JeZPL2JtnAi2L2z38p/pBt+RPI5RsQjOgsRCU7SvccaaLOGoRRPy2ar62\nCDbav2x2knbxHMwmlApKpbK5u0Mdp4DCtxMAEKECgYEA3YpO3E+2qPTyNHtvWDzi\nnHG7XKM3oPN6R8rvdZba/IOzpuKEUZ/MF5EtWmlDaum2horjgTKPAeFl0bYzrhkT\n5TAP4AcdC30RuYXLtWYS4suPgtzU/HelGC6N1f0tWonGXVRE4I7yGXWMRaBtnEL8\nvNgBcXn51EhHVsV4qWbAuWECgYEAw0obkMR13lhlLJ1PXnGwidm7zwlfTxeWHgWQ\nBG8zXLcWxDqWCUl//MdTc2Aes2Ym7KaGfnY3ymJf5E2c9hRmPx6KDNHnMTLUVb6D\nb5ZkJoLLLmRePR4xoqUM41FtPloM2W2X+zIihsXzG7ec/KjnsGpfTO+toG5witBt\n3z++iXECgYBrMuG1+VyJpP0OKCxYph2BVgczbEceurIQy0HTxItyZMgpmLIuTQSU\n4srvVMAqm6yWrd4oRi6s2kRKlb+sHrZh0D/eR5LmXD6XZwaLYDkDRTzMNc9Z2wso\nCF7ZjQjFJqW1w3EQuBqt9xNJHbfsRP3G4z7PihY5gkAC3MrmLbJUAQKBgBM51ITo\nEoKVSUCfLBUsNCkeGnNDhPKQa+MAwTDukavrCn6/Fc5MQiFsrjaJm/wlbmeV7V+9\n27g8/xvG2FERqQ9FvmmMsKoTSvw2CVKPB8US01X54504v8I3ZZFrjsm4q9MsCu5b\n/TIvgsOTzAzDxCuGDWPRpNJKjSHdazOzXtrBAoGBAMUBQsbu4QMLDTEXuVOx0OW6\niwPYTiB+KknkdxLId62McLtWelvOpkTAHYd8P+OHp0K8ajYuEjaerd9nbHcoQBTp\ndmsx3S5cnS1AAWV5xd1gTRWlpvBwcilIR/fbhCYHzm9+7RXedgzGBsKJJYE5D7JS\n9+0vvgtYoheKrZcZxUk0\n-----END PRIVATE KEY-----\n";
-
-  const privateKey = rawPrivateKey.replace(/\\n/g, '\n');
-
-  initializeApp({
-    credential: cert({
-      projectId,
-      clientEmail,
-      privateKey,
-    }),
-  });
+try {
+  if (!getApps().length) {
+    const projectId = process.env.FIREBASE_PROJECT_ID || "slam-tiers-leaderboard";
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || "firebase-adminsdk-fbsvc@slam-tiers-leaderboard.iam.gserviceaccount.com";
+    
+    const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY || "-----BEGIN PRIVATE KEY-----\nMIIEuwIBADANBgkqhkiG9w0BAQEFAASCBKUwggShAgEAAoIBAQCpAHvneoiq1a0R\nejzOuNCWi1jgGXInTkLzI0spsE8zp8KR/jxM+8tMow1kdnP8mZB8tUgGQPT/jlON\nwWOgb/AMm7AV6/yJl5yWHQOEpsgAnw3cs4O7QjZcjaPAEz7VOoDlzt0Jla+8mTXL\nDP2qFpAUuIgVAToZ6aRhsXPor6zK0hU+vig1zfhZjaUF65ealwa53SoeVxTj3bgW\nqeIurkiZUTujs3l8srjwPVVfN/votcRmykCxmIlYWpSacSj7HgkloqFR4+hpqDRZ\nxToFmNjv6reAyq24Nz7+R39YbUFcoDTpYx46w43j5OFS0r2qTBhbUTgCR7N5c7Jg\nY+rzRLzRAgMBAAECgf9FN0asbk50KUGtNs6Z5PebZ43BKGGoacLhzR4ZSXWUa4fH\nGjIvFWfwdHK3uXmVPVjbTNqVEIoihQXclF7JT+qVY+4zefokICiogCvS/QTfKfw8\nk1JZoat45bd7NYs2YEZ4IaNqUGHCcQaChUixQwfWdLQ0+GTRITj4wNcjbr19Eznj\n23Tmpcg3EVTXfpDNz9HLZUgzCcXEahxPCZPRj50OZVHP8yHHQYT1cp9C99tRDjUi\nEqxG7h/JeZPL2JtnAi2L2z38p/pBt+RPI5RsQjOgsRCU7SvccaaLOGoRRPy2ar62\nCDbav2x2knbxHMwmlApKpbK5u0Mdp4DCtxMAEKECgYEA3YpO3E+2qPTyNHtvWDzi\nnHG7XKM3oPN6R8rvdZba/IOzpuKEUZ/MF5EtWmlDaum2horjgTKPAeFl0bYzrhkT\n5TAP4AcdC30RuYXLtWYS4suPgtzU/HelGC6N1f0tWonGXVRE4I7yGXWMRaBtnEL8\nvNgBcXn51EhHVsV4qWbAuWECgYEAw0obkMR13lhlLJ1PXnGwidm7zwlfTxeWHgWQ\nBG8zXLcWxDqWCUl//MdTc2Aes2Ym7KaGfnY3ymJf5E2c9hRmPx6KDNHnMTLUVb6D\nb5ZkJoLLLmRePR4xoqUM41FtPloM2W2X+zIihsXzG7ec/KjnsGpfTO+toG5witBt\n3z++iXECgYBrMuG1+VyJpP0OKCxYph2BVgczbEceurIQy0HTxItyZMgpmLIuTQSU\n4srvVMAqm6yWrd4oRi6s2kRKlb+sHrZh0D/eR5LmXD6XZwaLYDkDRTzMNc9Z2wso\nCF7ZjQjFJqW1w3EQuBqt9xNJHbfsRP3G4z7PihY5gkAC3MrmLbJUAQKBgBM51ITo\nEoKVSUCfLBUsNCkeGnNDhPKQa+MAwTDukavrCn6/Fc5MQiFsrjaJm/wlbmeV7V+9\n27g8/xvG2FERqQ9FvmmMsKoTSvw2CVKPB8US01X54504v8I3ZZFrjsm4q9MsCu5b\n/TIvgsOTzAzDxCuGDWPRpNJKjSHdazOzXtrBAoGBAMUBQsbu4QMLDTEXuVOx0OW6\niwPYTiB+KknkdxLId62McLtWelvOpkTAHYd8P+OHp0K8ajYuEjaerd9nbHcoQBTp\ndmsx3S5cnS1AAWV5xd1gTRWlpvBwcilIR/fbhCYHzm9+7RXedgzGBsKJJYE5D7JS\n9+0vvgtYoheKrZcZxUk0\n-----END PRIVATE KEY-----\n";
+    
+    const privateKey = rawPrivateKey.replace(/\\n/g, '\n');
+    
+    initializeApp({
+      credential: cert({
+        projectId,
+        clientEmail,
+        privateKey,
+      }),
+    });
+  }
+  db = getFirestore();
+} catch (firebaseErr: any) {
+  console.error("Firebase admin initialization failed:", firebaseErr);
 }
-
-db = getFirestore();
 
 // The 8 valid gamemodes for SlamTiers
 const VALID_GAMEMODES = new Set([
@@ -114,47 +117,92 @@ app.post(ROLES_POST_PATHS, async (req, res) => {
   const { discordId, tier, points, username, avatarUrl } = req.body;
   let { gamemode } = req.body;
 
-  if (!discordId) {
-    return res.status(400).json({ error: 'Bad Request: Missing required field discordId' });
+  let rawUsername = username ? String(username).trim() : '';
+  if (!rawUsername && req.body.id) {
+    rawUsername = String(req.body.id).trim();
   }
 
-  // Fallback: derive gamemode from route pathname (e.g. /api/tierrolemace => mace)
-  if (!gamemode) {
+  let finalDiscordId = discordId ? String(discordId).trim() : '';
+  let finalUsername = rawUsername || (finalDiscordId ? `Player_${finalDiscordId.substring(0, 4)}` : '');
+
+  // Identity Mapping: Map linked identities (such as PlanetLord and blurr) to a single leaderboard entry
+  const isLinkedPlanetLordOrBlurr = 
+    finalUsername.toLowerCase() === 'planetlord' || 
+    finalUsername.toLowerCase() === 'blurr' ||
+    finalDiscordId === 'planetlord_linked_id' ||
+    finalDiscordId === 'blurr_linked_id';
+
+  if (isLinkedPlanetLordOrBlurr) {
+    console.log(`[Identity Mapping] Mapping linked identity for "${finalUsername}" (ID: "${finalDiscordId}") to canonical PlanetLord entry.`);
+    finalDiscordId = 'planetlord_linked_id';
+    finalUsername = 'PlanetLord';
+  }
+
+  if (!finalDiscordId) {
+    console.warn(`[Ambiguous Payload Flagged] Route ${req.path}: Missing discordId in request`);
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Ambiguous Data Flagged: Missing required parameter "discordId". Please review payload.' 
+    });
+  }
+
+  let finalGamemode = gamemode ? String(gamemode).trim().toLowerCase() : '';
+  if (!finalGamemode) {
     const pathLowers = req.path.toLowerCase();
     for (const validGm of VALID_GAMEMODES) {
       if (pathLowers.includes(validGm)) {
-        gamemode = validGm;
+        finalGamemode = validGm;
         break;
       }
     }
   }
 
-  if (!gamemode || !VALID_GAMEMODES.has(gamemode)) {
+  if (!finalGamemode || !VALID_GAMEMODES.has(finalGamemode)) {
+    console.warn(`[Ambiguous Payload Flagged] Route ${req.path}: Invalid/missing gamemode "${finalGamemode}" for player ${finalUsername}`);
     return res.status(400).json({
-      error: `Bad Request: Invalid or missing gamemode. Must be one of: ${Array.from(VALID_GAMEMODES).join(', ')}`
+      success: false,
+      error: `Ambiguous Data Flagged: Invalid or missing gamemode "${finalGamemode}". Must be one of: ${Array.from(VALID_GAMEMODES).join(', ')}`
     });
   }
 
-  if (tier === undefined || points === undefined) {
-    return res.status(400).json({ error: 'Bad Request: Missing required fields (tier or points)' });
+  if (tier === undefined) {
+    console.warn(`[Ambiguous Payload Flagged] Route ${req.path}: Missing tier payload for player ${finalUsername}`);
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Ambiguous Data Flagged: Missing required parameter "tier". Please specify a tier (e.g. HT1).' 
+    });
+  }
+
+  const finalTier = String(tier).trim().toUpperCase();
+  const calculatedWeight = getTierWeightFromTier(finalTier);
+
+  if (calculatedWeight === 11) {
+    console.warn(`[Ambiguous Payload Flagged] Route ${req.path}: Invalid tier "${finalTier}" received for player ${finalUsername}`);
+    return res.status(400).json({
+      success: false,
+      error: `Ambiguous Data Flagged: Invalid tier "${finalTier}". Tiers must be between LT5 and HT1.`
+    });
   }
 
   try {
-    const numPoints = Number(points);
-    if (isNaN(numPoints)) {
-      return res.status(400).json({ error: 'Bad Request: points must be numerical' });
+    // Parse points or dynamically fall back to the schema tier weight hierarchy
+    let numPoints = points !== undefined && points !== null ? Number(points) : getPointsFromTier(finalTier);
+    if (isNaN(numPoints) || points === '') {
+      numPoints = getPointsFromTier(finalTier);
     }
 
-    // Resolve tierWeight: check payload, fallback to dynamic tier mapping
-    const calculatedWeight = req.body.tierWeight !== undefined 
-      ? Number(req.body.tierWeight) 
-      : (req.body.weight !== undefined ? Number(req.body.weight) : getTierWeightFromTier(tier));
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: "Database service is currently unavailable. Please check configuration."
+      });
+    }
 
-    const playerRef = db.collection('players').doc(String(discordId));
+    const playerRef = db.collection('players').doc(String(finalDiscordId));
     const now = FieldValue.serverTimestamp();
 
     const gamemodeData = {
-      tier: String(tier),
+      tier: finalTier,
       points: numPoints,
       tierWeight: calculatedWeight,
       updatedAt: now
@@ -162,11 +210,11 @@ app.post(ROLES_POST_PATHS, async (req, res) => {
 
     // Deep Merge (merge: true) to allow adding or updating specific gamemodes without clobbering others
     const initialOrMergePayload = {
-      discordId: String(discordId),
-      username: username ? String(username) : (req.body.id || String(discordId)),
+      discordId: String(finalDiscordId),
+      username: String(finalUsername),
       avatarUrl: avatarUrl ? String(avatarUrl) : null,
       gamemodes: {
-        [gamemode]: gamemodeData
+        [finalGamemode]: gamemodeData
       },
       lastUpdated: now
     };
@@ -176,7 +224,7 @@ app.post(ROLES_POST_PATHS, async (req, res) => {
     return res.status(200).json({
       success: true,
       channelId: "1501282759983763487",
-      message: `Successfully set gamemode ${gamemode} mapping and deep merged in Firestore.`
+      message: `Successfully set gamemode ${finalGamemode} mapping and deep merged in Firestore.`
     });
 
   } catch (error: any) {
@@ -252,9 +300,16 @@ app.get('/api/player', async (req, res) => {
     }
 
     const allPlayersDocs = Array.from(playerMap.values());
-    const matchedPlayer = allPlayersDocs.find(
-      p => p.username?.trim().toLowerCase() === searchName || p.id?.trim().toLowerCase() === searchName
-    );
+    const matchedPlayer = allPlayersDocs.find(p => {
+      const pName = p.username?.trim().toLowerCase();
+      const pId = p.id?.trim().toLowerCase();
+      
+      // Match linked identities (such as PlanetLord and blurr) to the same leaderboard entry
+      if (searchName === 'blurr' || searchName === 'planetlord') {
+        return pName === 'planetlord' || pId === 'planetlord_linked_id';
+      }
+      return pName === searchName || pId === searchName;
+    });
 
     if (!matchedPlayer) {
       return res.status(404).json({ success: false, error: 'Player not found' });
@@ -459,6 +514,10 @@ async function cleanupMockPlayersFromDb() {
   ];
 
   try {
+    if (!db) {
+      console.log('Database cleanup skipped: Firebase not initialized.');
+      return;
+    }
     console.log('Running background database cleanup to completely target and remove legacy/mock player records...');
     const batch = db.batch();
     let count = 0;
@@ -468,6 +527,18 @@ async function cleanupMockPlayersFromDb() {
       batch.delete(docRef);
       count++;
     }
+
+    // Also scan for any players whose username is "Knockbacc" (case-insensitive) or document ID is "Knockbacc"
+    const playersSnapshot = await db.collection('players').get();
+    playersSnapshot.forEach(doc => {
+      const data = doc.data();
+      const uName = (data.username || "").toLowerCase();
+      const docId = doc.id.toLowerCase();
+      if (uName === "knockbacc" || docId === "knockbacc") {
+        batch.delete(doc.ref);
+        count++;
+      }
+    });
 
     await batch.commit();
     console.log(`Database cleanup done. Purged ${count} specified mock/placeholder player doc refs.`);

@@ -39,62 +39,116 @@ export default async function handler(req, res) {
   const { discordId, tier, points, username, avatarUrl } = req.body;
   let { gamemode } = req.body;
 
-  if (!discordId) {
-    return res.status(400).json({ error: 'Bad Request: Missing required field discordId' });
+  let rawUsername = username ? String(username).trim() : '';
+  if (!rawUsername && req.body.id) {
+    rawUsername = String(req.body.id).trim();
+  }
+
+  let finalDiscordId = discordId ? String(discordId).trim() : '';
+  let finalUsername = rawUsername || (finalDiscordId ? `Player_${finalDiscordId.substring(0, 4)}` : '');
+
+  // Identity Mapping: Map linked identities (such as PlanetLord and blurr) to a single leaderboard entry
+  const isLinkedPlanetLordOrBlurr = 
+    finalUsername.toLowerCase() === 'planetlord' || 
+    finalUsername.toLowerCase() === 'blurr' ||
+    finalDiscordId === 'planetlord_linked_id' ||
+    finalDiscordId === 'blurr_linked_id';
+
+  if (isLinkedPlanetLordOrBlurr) {
+    console.log(`[Identity Mapping API] Mapping linked identity for "${finalUsername}" (ID: "${finalDiscordId}") to canonical PlanetLord entry.`);
+    finalDiscordId = 'planetlord_linked_id';
+    finalUsername = 'PlanetLord';
+  }
+
+  if (!finalDiscordId) {
+    console.warn(`[Ambiguous Payload Flagged API] Route ${req.url}: Missing discordId in request`);
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Ambiguous Data Flagged: Missing required parameter "discordId". Please review payload.' 
+    });
   }
 
   // Fallback: derive gamemode from route pathname if not defined
-  if (!gamemode) {
+  let finalGamemode = gamemode ? String(gamemode).trim().toLowerCase() : '';
+  if (!finalGamemode) {
     const pathLowers = (req.url || req.path || '').toLowerCase();
     for (const validGm of VALID_GAMEMODES) {
       if (pathLowers.includes(validGm)) {
-        gamemode = validGm;
+        finalGamemode = validGm;
         break;
       }
     }
   }
 
-  if (!gamemode || !VALID_GAMEMODES.has(gamemode)) {
+  if (!finalGamemode || !VALID_GAMEMODES.has(finalGamemode)) {
+    console.warn(`[Ambiguous Payload Flagged API] Route ${req.url}: Invalid/missing gamemode "${finalGamemode}" for player ${finalUsername}`);
     return res.status(400).json({
-      error: `Bad Request: Invalid or missing gamemode. Must be one of: ${Array.from(VALID_GAMEMODES).join(', ')}`
+      success: false,
+      error: `Ambiguous Data Flagged: Invalid or missing gamemode "${finalGamemode}". Must be one of: ${Array.from(VALID_GAMEMODES).join(', ')}`
     });
   }
 
-  if (tier === undefined || points === undefined) {
-    return res.status(400).json({ error: 'Bad Request: Missing required fields (tier or points)' });
+  if (tier === undefined) {
+    console.warn(`[Ambiguous Payload Flagged API] Route ${req.url}: Missing tier payload for player ${finalUsername}`);
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Ambiguous Data Flagged: Missing required parameter "tier". Please specify a tier (e.g. HT1).' 
+    });
+  }
+
+  const finalTier = String(tier).trim().toUpperCase();
+
+  // Mapping weights
+  const TIER_WEIGHTS = {
+    'HT1': 1, 'LT1': 2,
+    'HT2': 3, 'LT2': 4,
+    'HT3': 5, 'LT3': 6,
+    'HT4': 7, 'LT4': 8,
+    'HT5': 9, 'LT5': 10,
+  };
+
+  const TIER_POINTS = {
+    'HT1': 60, 'LT1': 40,
+    'HT2': 30, 'LT2': 25,
+    'HT3': 20, 'LT3': 15,
+    'HT4': 12, 'LT4': 8,
+    'HT5': 5,  'LT5': 2,
+  };
+
+  const getTierWeightFromTier = (t) => {
+    if (!t) return 11;
+    const normalized = String(t).trim().toUpperCase();
+    return TIER_WEIGHTS[normalized] !== undefined ? TIER_WEIGHTS[normalized] : 11;
+  };
+
+  const getPointsFromTier = (t) => {
+    if (!t) return 0;
+    const normalized = String(t).trim().toUpperCase();
+    return TIER_POINTS[normalized] || 0;
+  };
+
+  const calculatedWeight = getTierWeightFromTier(finalTier);
+
+  if (calculatedWeight === 11) {
+    console.warn(`[Ambiguous Payload Flagged API] Route ${req.url}: Invalid tier "${finalTier}" received for player ${finalUsername}`);
+    return res.status(400).json({
+      success: false,
+      error: `Ambiguous Data Flagged: Invalid tier "${finalTier}". Tiers must be between LT5 and HT1.`
+    });
   }
 
   try {
-    // Explicitly parse values to numbers
-    const numPoints = Number(points);
-    if (isNaN(numPoints)) {
-      return res.status(400).json({ error: 'Bad Request: points must be numerical' });
+    // Explicitly parse values to numbers or fallback to dynamic translation from tier weight hierarchy
+    let numPoints = points !== undefined && points !== null ? Number(points) : getPointsFromTier(finalTier);
+    if (isNaN(numPoints) || points === '') {
+      numPoints = getPointsFromTier(finalTier);
     }
 
-    // Mapping weights
-    const TIER_WEIGHTS = {
-      'HT1': 1, 'LT1': 2,
-      'HT2': 3, 'LT2': 4,
-      'HT3': 5, 'LT3': 6,
-      'HT4': 7, 'LT4': 8,
-      'HT5': 9, 'LT5': 10,
-    };
-
-    const getTierWeightFromTier = (t) => {
-      if (!t) return 11;
-      const normalized = String(t).trim().toUpperCase();
-      return TIER_WEIGHTS[normalized] !== undefined ? TIER_WEIGHTS[normalized] : 11;
-    };
-
-    const calculatedWeight = req.body.tierWeight !== undefined 
-      ? Number(req.body.tierWeight) 
-      : (req.body.weight !== undefined ? Number(req.body.weight) : getTierWeightFromTier(tier));
-
-    const playerRef = db.collection('players').doc(String(discordId));
+    const playerRef = db.collection('players').doc(String(finalDiscordId));
     const now = admin.firestore.FieldValue.serverTimestamp();
 
     const gamemodeData = {
-      tier: String(tier),
+      tier: finalTier,
       points: numPoints,
       tierWeight: calculatedWeight,
       updatedAt: now
@@ -102,11 +156,11 @@ export default async function handler(req, res) {
 
     // Deep merge payload to prevent clobbering other gamemodes
     const initialOrMergePayload = {
-      discordId: String(discordId),
-      username: username ? String(username) : (req.body.id || String(discordId)),
+      discordId: String(finalDiscordId),
+      username: String(finalUsername),
       avatarUrl: avatarUrl ? String(avatarUrl) : null,
       gamemodes: {
-        [gamemode]: gamemodeData
+        [finalGamemode]: gamemodeData
       },
       lastUpdated: now
     };
@@ -116,7 +170,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       channelId: '1501282759983763487',
-      message: `Successfully set gamemode ${gamemode} mapping and deep merged in Firestore.`
+      message: `Successfully set gamemode ${finalGamemode} mapping and deep merged in Firestore.`
     });
 
   } catch (error) {

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, RefreshCw, Star, Info, Copy, Check, Search, X } from 'lucide-react';
+import { Trophy, RefreshCw, Star, Info, Copy, Check, Search, X, Download, Terminal, Bot, Code, Cpu } from 'lucide-react';
 import { DiscordIcon } from './DiscordIcon';
 import { DISCORD_LINK } from '../config';
+import html2canvas from 'html2canvas';
 
 const VALID_GAMEMODES = [
   { id: 'overall', name: 'Overall Points' },
@@ -206,6 +207,28 @@ function getGamemodeIcon(id: string) {
   );
 }
 
+function getAchievementTitleStyles(points: number): string {
+  if (points >= 400) {
+    return "bg-gradient-to-r from-amber-500/25 via-yellow-500/15 to-orange-500/25 text-yellow-250 border-amber-400/60 shadow-[0_0_15px_rgba(234,179,8,0.3)] font-bold tracking-wide";
+  }
+  if (points >= 250) {
+    return "bg-gradient-to-r from-purple-600/30 via-fuchsia-500/20 to-indigo-600/30 text-purple-200 border-purple-400/50 shadow-[0_0_12px_rgba(168,85,247,0.25)] font-semibold";
+  }
+  if (points >= 100) {
+    return "bg-gradient-to-r from-cyan-500/25 via-sky-500/20 to-teal-500/25 text-cyan-200 border-cyan-400/45 shadow-[0_0_10px_rgba(34,211,238,0.2)] font-semibold";
+  }
+  if (points >= 50) {
+    return "bg-gradient-to-r from-orange-500/25 via-amber-600/20 to-red-500/25 text-orange-200 border-orange-400/45 shadow-[0_0_8px_rgba(249,115,22,0.18)] font-semibold";
+  }
+  if (points >= 20) {
+    return "bg-gradient-to-r from-indigo-500/25 via-blue-600/20 to-indigo-500/25 text-indigo-200 border-indigo-400/45 shadow-[0_0_8px_rgba(99,102,241,0.15)] font-semibold";
+  }
+  if (points >= 10) {
+    return "bg-gradient-to-r from-red-500/25 via-rose-500/20 to-pink-500/25 text-red-200 border-red-500/40 shadow-[0_0_8px_rgba(239,68,68,0.15)] font-semibold";
+  }
+  return "bg-gradient-to-r from-zinc-800/50 via-zinc-900/60 to-zinc-855/50 border-zinc-800 text-zinc-400 font-medium";
+}
+
 export function LeaderboardSection() {
   const [activeTab, setActiveTab] = useState('overall');
   const [data, setData] = useState<any[]>([]);
@@ -219,9 +242,405 @@ export function LeaderboardSection() {
   const [searchResult, setSearchResult] = useState<any | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [avatarBase64, setAvatarBase64] = useState<string>('');
+
+  // Discord Bot developer-center and live simulator states
+  const [showBotHubModal, setShowBotHubModal] = useState(false);
+  const [botLanguage, setBotLanguage] = useState<'node' | 'python'>('node');
+  const [copiedToken, setCopiedToken] = useState(false);
+  const [copiedEndpoint, setCopiedEndpoint] = useState(false);
+  const [simUsername, setSimUsername] = useState('Steve');
+  const [simDiscordId, setSimDiscordId] = useState('731320713892742918');
+  const [simGamemode, setSimGamemode] = useState('sword');
+  const [simTier, setSimTier] = useState('HT2');
+  const [simPoints, setSimPoints] = useState('30');
+  const [simLoading, setSimLoading] = useState(false);
+  const [simSuccess, setSimSuccess] = useState<string | null>(null);
+  const [simError, setSimError] = useState<string | null>(null);
+
+  const handleSimulateBotRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!simUsername.trim() || !simDiscordId.trim()) {
+      setSimError('Please fill in both Minecraft Username and Discord ID.');
+      return;
+    }
+    setSimLoading(true);
+    setSimError(null);
+    setSimSuccess(null);
+
+    try {
+      const response = await fetch('/api/promote', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer A@V>Wr]qs~_,?6E#*L9)2=4dXxc4PNdE'
+        },
+        body: JSON.stringify({
+          discordId: simDiscordId.trim(),
+          username: simUsername.trim(),
+          gamemode: simGamemode,
+          tier: simTier,
+          points: Number(simPoints) || 0
+        })
+      });
+
+      const resJson = await response.json();
+      if (response.ok && resJson.success) {
+        setSimSuccess('Success! Bot integration tested. Database record merged successfully!');
+        // Refresh live rankings to show the newly updated player instantly
+        setTimeout(() => {
+          fetchRankings(activeTab);
+        }, 150);
+      } else {
+        setSimError(resJson.error || 'Connection failed. Check authentication secret headers or fields.');
+      }
+    } catch (err: any) {
+      setSimError(`Connection error: ${err.message || err}`);
+    } finally {
+      setSimLoading(false);
+    }
+  };
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
+
+  const loadAvatarBase64 = async (username: string): Promise<string> => {
+    try {
+      const response = await fetch(`https://mc-heads.net/avatar/${username}/100.png`, {
+        cache: 'no-store'
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        return new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            resolve(reader.result as string);
+          };
+          reader.readAsDataURL(blob);
+        });
+      }
+    } catch (e) {
+      console.warn("CORS fetch failed for mc-heads, falling back to direct URL:", e);
+    }
+    return `https://mc-heads.net/avatar/${username}/100.png`;
+  };
+
+  const handleDownloadCard = async () => {
+    const el = document.getElementById('player-stats-card-capture');
+    if (!el) return;
+
+    setIsDownloading(true);
+
+    const canvasEl = document.createElement('canvas');
+    canvasEl.width = 1;
+    canvasEl.height = 1;
+    const ctx = canvasEl.getContext('2d');
+
+    // Safe color resolver that converts modern oklch/oklab to standard hex/rgba colors
+    const resolveToSafeColor = (colorStr: string): string => {
+      if (!colorStr) return colorStr;
+      if (!colorStr.includes('oklch') && !colorStr.includes('oklab')) {
+        return colorStr;
+      }
+
+      try {
+        return colorStr.replace(/(oklch|oklab)\([^)]+\)/g, (match) => {
+          if (ctx) {
+            ctx.fillStyle = 'rgba(0,0,0,0)';
+            ctx.fillStyle = match;
+            const resVal = ctx.fillStyle;
+            if (resVal && resVal !== 'rgba(0,0,0,0)' && resVal !== 'transparent') {
+              return resVal;
+            }
+          }
+          // Manual high-fidelity fallbacks for Tailwind v4 colors
+          if (match.includes('0.627') || match.includes('0.585') || match.includes('0.5') || match.includes('0.4')) {
+            return 'rgb(168, 85, 247)'; // Gorgeous purple
+          }
+          if (match.includes('0.982') || match.includes('0.9') || match.includes('0.95')) {
+            return 'rgb(244, 244, 245)'; // Off-white/slate-50
+          }
+          if (match.includes('0.12') || match.includes('0.15') || match.includes('0.17') || match.includes('0.09')) {
+            return 'rgb(12, 16, 27)'; // Slate dark background
+          }
+          return 'rgb(168, 85, 247)'; // Default purple fallback
+        });
+      } catch (e) {
+        return colorStr
+          .replace(/oklch\([^)]+\)/g, 'rgb(168, 85, 247)')
+          .replace(/oklab\([^)]+\)/g, 'rgb(168, 85, 247)');
+      }
+    };
+
+    // Proxy the main window's getComputedStyle to sanitize values dynamically during html2canvas traverse
+    const originalMainGetComputed = window.getComputedStyle;
+    window.getComputedStyle = function (elt, pseudoElt) {
+      const style = originalMainGetComputed.call(this, elt, pseudoElt);
+      return new Proxy(style, {
+        get(target, prop) {
+          const val = Reflect.get(target, prop);
+          if (typeof val === 'string') {
+            if (val.includes('oklch') || val.includes('oklab')) {
+              return resolveToSafeColor(val);
+            }
+          } else if (typeof val === 'function') {
+            if (prop === 'getPropertyValue') {
+              return function (propertyName: string) {
+                const rawVal = target.getPropertyValue(propertyName);
+                if (rawVal && (rawVal.includes('oklch') || rawVal.includes('oklab'))) {
+                  return resolveToSafeColor(rawVal);
+                }
+                return rawVal;
+              };
+            }
+            return val.bind(target);
+          }
+          return val;
+        }
+      });
+    };
+
+    const styleBackups: { element: HTMLStyleElement; originalText: string }[] = [];
+    const linkBackups: { element: HTMLLinkElement; originalDisabled: boolean }[] = [];
+    const tempStyleElements: HTMLStyleElement[] = [];
+
+    try {
+      // 1. Sanitize all <style> elements by replacing oklch/oklab with safe fallback rgb colors
+      const styleElements = Array.from(document.querySelectorAll('style'));
+      styleElements.forEach((style) => {
+        const text = style.innerHTML;
+        if (text.includes('oklch') || text.includes('oklab')) {
+          styleBackups.push({ element: style, originalText: text });
+          style.innerHTML = text
+            .replace(/oklch\([^)]+\)/g, 'rgb(147, 51, 234)')
+            .replace(/oklab\([^)]+\)/g, 'rgb(147, 51, 234)');
+        }
+      });
+
+      // 2. Temporarily replace <link rel="stylesheet"> elements that might contain oklch/oklab so html2canvas ignores them.
+      const linkElements = Array.from(document.querySelectorAll('link[rel="stylesheet"]')) as HTMLLinkElement[];
+      for (const link of linkElements) {
+        linkBackups.push({ element: link, originalDisabled: link.disabled });
+        try {
+          let hasOklch = false;
+          if (link.sheet) {
+            try {
+              const rules = Array.from(link.sheet.cssRules);
+              hasOklch = rules.some(r => r.cssText.includes('oklch') || r.cssText.includes('oklab'));
+            } catch (e) {
+              hasOklch = true; // safe fallback assumption (e.g. CORS protected)
+            }
+          } else {
+            hasOklch = true;
+          }
+
+          if (hasOklch && link.href) {
+            const response = await fetch(link.href);
+            if (response.ok) {
+              const cssText = await response.text();
+              const sanitizedCss = cssText
+                .replace(/oklch\([^)]+\)/g, 'rgb(147, 51, 234)')
+                .replace(/oklab\([^)]+\)/g, 'rgb(147, 51, 234)');
+              
+              const tempStyle = document.createElement('style');
+              tempStyle.innerHTML = sanitizedCss;
+              document.head.appendChild(tempStyle);
+              tempStyleElements.push(tempStyle);
+
+              link.disabled = true;
+            }
+          }
+        } catch (linkErr) {
+          console.warn("Failed to sanitize stylesheet link, disabling during capture:", link.href, linkErr);
+          link.disabled = true;
+        }
+      }
+
+      // Small lag to ensure state and DOM are fully synchronized
+      await new Promise((r) => setTimeout(r, 150));
+
+      const canvas = await html2canvas(el, {
+        useCORS: true,
+        allowTaint: true,
+        scale: 3, // Very high definition 3x resolution render
+        backgroundColor: '#0c101b',
+        logging: false,
+        onclone: (clonedDoc) => {
+          // A. Proxy the cloned window's getComputedStyle to sanitize values dynamically inside the cloned iframe context
+          const clonedWindow = clonedDoc.defaultView;
+          if (clonedWindow) {
+            const originalGetComputed = clonedWindow.getComputedStyle;
+            clonedWindow.getComputedStyle = function (elt, pseudoElt) {
+              const style = originalGetComputed.call(this, elt, pseudoElt);
+              return new Proxy(style, {
+                get(target, prop) {
+                  const val = Reflect.get(target, prop);
+                  if (typeof val === 'string') {
+                    if (val.includes('oklch') || val.includes('oklab')) {
+                      return resolveToSafeColor(val);
+                    }
+                  } else if (typeof val === 'function') {
+                    if (prop === 'getPropertyValue') {
+                      return function (propertyName: string) {
+                        const rawVal = target.getPropertyValue(propertyName);
+                        if (rawVal && (rawVal.includes('oklch') || rawVal.includes('oklab'))) {
+                          return resolveToSafeColor(rawVal);
+                        }
+                        return rawVal;
+                      };
+                    }
+                    return val.bind(target);
+                  }
+                  return val;
+                }
+              });
+            };
+          }
+
+          // B. Sanitize all style tags within the cloned document
+          try {
+            const styleTags = clonedDoc.querySelectorAll('style');
+            styleTags.forEach((styleTag) => {
+              let cssText = styleTag.innerHTML;
+              if (cssText.includes('oklch') || cssText.includes('oklab')) {
+                cssText = resolveToSafeColor(cssText);
+                styleTag.innerHTML = cssText;
+              }
+            });
+          } catch (errStyle) {
+            console.warn("Failed to sanitize onclone style tags:", errStyle);
+          }
+
+          // C. Sanitize all cloned styleSheets to remove or convert oklch/oklab rule declarations
+          try {
+            const sheets = Array.from(clonedDoc.styleSheets);
+            sheets.forEach((sheet) => {
+              try {
+                const rules = Array.from(sheet.cssRules || sheet.rules);
+                rules.forEach((rule) => {
+                  if (rule instanceof CSSStyleRule) {
+                    const style = rule.style;
+                    for (let i = 0; i < style.length; i++) {
+                      const prop = style[i];
+                      const val = style.getPropertyValue(prop);
+                      if (val && (val.includes('oklch') || val.includes('oklab'))) {
+                        try {
+                          style.setProperty(prop, resolveToSafeColor(val));
+                        } catch (e) {
+                          // Ignore read-only rules
+                        }
+                      }
+                    }
+                  }
+                });
+              } catch (sheetErr) {
+                console.warn("Failed to sanitize stylesheet rule contents (CORS or read-only):", sheetErr);
+              }
+            });
+          } catch (errSheets) {
+            console.warn("Failed to map cloned styleSheets:", errSheets);
+          }
+
+          // D. Locate card capture element
+          const target = clonedDoc.getElementById('player-stats-card-capture');
+          if (target) {
+            // Apply perfect styles for standalone high-quality collection card export
+            target.style.borderRadius = '24px';
+            target.style.boxShadow = '0 25px 60px rgba(0, 0, 0, 0.95)';
+            target.style.border = '1px solid rgba(168, 85, 247, 0.2)';
+            target.style.padding = '32px';
+            target.style.width = '420px';
+            target.style.maxWidth = '100%';
+            target.style.margin = '0 auto';
+
+            // E. Loop through all element styles in the capture container to replace computed colors dynamically
+            try {
+              const colorProps = [
+                'color',
+                'backgroundColor',
+                'borderColor',
+                'borderTopColor',
+                'borderBottomColor',
+                'borderLeftColor',
+                'borderRightColor',
+                'boxShadow',
+                'textShadow',
+                'stroke',
+                'fill'
+              ];
+
+              const allElements = [target, ...Array.from(target.querySelectorAll('*'))];
+              allElements.forEach((element) => {
+                if (!(element instanceof HTMLElement)) return;
+
+                const computed = clonedDoc.defaultView
+                  ? clonedDoc.defaultView.getComputedStyle(element)
+                  : window.getComputedStyle(element);
+
+                colorProps.forEach((prop) => {
+                  const cssVal = computed[prop as any];
+                  if (typeof cssVal === 'string' && (cssVal.includes('oklch') || cssVal.includes('oklab'))) {
+                    const safeVal = resolveToSafeColor(cssVal);
+                    element.style[prop as any] = safeVal;
+                  }
+                });
+
+                // Check background images / linear gradients
+                const bgImg = computed.backgroundImage;
+                if (bgImg && (bgImg.includes('oklch') || bgImg.includes('oklab'))) {
+                  element.style.backgroundImage = resolveToSafeColor(bgImg);
+                }
+              });
+            } catch (errElements) {
+              console.warn("Failed to sanitize onclone elements:", errElements);
+            }
+          }
+        }
+      });
+
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      const link = document.createElement('a');
+      link.download = `${searchResult?.username || 'player'}_slamtiers_stats.png`;
+      link.href = imgData;
+      link.click();
+    } catch (err) {
+      console.error("Failed to generate or download card:", err);
+    } finally {
+      // 1. Restore original style tags content in the main document
+      styleBackups.forEach(({ element, originalText }) => {
+        try {
+          element.innerHTML = originalText;
+        } catch (e) {
+          console.warn("Failed to restore style element content:", e);
+        }
+      });
+
+      // 2. Restore disabled status on original stylesheet links
+      linkBackups.forEach(({ element, originalDisabled }) => {
+        try {
+          element.disabled = originalDisabled;
+        } catch (e) {
+          console.warn("Failed to restore link element disabled status:", e);
+        }
+      });
+
+      // 3. Remove all temporary sanitized style elements
+      tempStyleElements.forEach((tempStyle) => {
+        try {
+          if (tempStyle.parentNode) {
+            tempStyle.parentNode.removeChild(tempStyle);
+          }
+        } catch (e) {
+          console.warn("Failed to remove temporary style element:", e);
+        }
+      });
+
+      // Always restore original getComputedStyle on cleanup
+      window.getComputedStyle = originalMainGetComputed;
+      setIsDownloading(false);
+    }
+  };
 
   const handleSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -237,6 +656,11 @@ export function LeaderboardSection() {
         if (json.success && json.player) {
           setSearchResult(json.player);
           setSearchError(null);
+          // Pre-fetch Base64 representation of player's Minecraft avatar for high-fidelity offline card download
+          setAvatarBase64('');
+          loadAvatarBase64(json.player.username).then(base64 => {
+            setAvatarBase64(base64);
+          });
         } else {
           setSearchError('Player profile not found.');
           setSearchResult(null);
@@ -265,6 +689,11 @@ export function LeaderboardSection() {
         if (json.success && json.player) {
           setSearchResult(json.player);
           setSearchError(null);
+          // Pre-fetch Base64 representation of player's Minecraft avatar for high-fidelity offline card download
+          setAvatarBase64('');
+          loadAvatarBase64(json.player.username).then(base64 => {
+            setAvatarBase64(base64);
+          });
           // Gently scroll up to view the selected player profile card
           document.getElementById('leaderboard')?.scrollIntoView({ behavior: 'smooth' });
         }
@@ -280,6 +709,19 @@ export function LeaderboardSection() {
     navigator.clipboard.writeText('mcpvp.club');
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copyEndpoint = () => {
+    const apiEndpoint = `${window.location.origin}/api/promote`;
+    navigator.clipboard.writeText(apiEndpoint);
+    setCopiedEndpoint(true);
+    setTimeout(() => setCopiedEndpoint(false), 2000);
+  };
+
+  const copyToken = () => {
+    navigator.clipboard.writeText('A@V>Wr]qs~_,?6E#*L9)2=4dXxc4PNdE');
+    setCopiedToken(true);
+    setTimeout(() => setCopiedToken(false), 2000);
   };
 
   // Fetch from the live Serverless API
@@ -310,6 +752,18 @@ export function LeaderboardSection() {
     setCurrentPage(1);
   }, [activeTab]);
 
+  // Lock body scroll when any modal is open to ensure no scroll down can occur
+  useEffect(() => {
+    if (searchResult || showBotHubModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [searchResult, showBotHubModal]);
+
   return (
     <section id="leaderboard" className="py-24 px-4 relative z-10 max-w-7xl mx-auto">
       {/* Decorative center glowing orb */}
@@ -322,9 +776,8 @@ export function LeaderboardSection() {
         transition={{ duration: 0.7 }}
         className="text-center mb-12"
       >
-        <span className="text-purple-400 font-mono text-sm tracking-widest uppercase mb-2 block">Live Leaderboard</span>
         <h2 className="font-display text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-400 mb-4">
-          SlamTiers Live Leaderboard
+          SlamTiers Leaderboard
         </h2>
         <div className="w-20 h-1 bg-purple-600 mx-auto rounded-full mb-4" />
       </motion.div>
@@ -381,10 +834,10 @@ export function LeaderboardSection() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 30 }}
               transition={{ type: "spring", duration: 0.4, bounce: 0.15 }}
-              className="relative w-full max-w-[480px] bg-[#0c101b]/98 border border-zinc-850/60 rounded-3xl p-6 md:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.95)] overflow-hidden text-center text-white z-55 max-h-[90vh] overflow-y-auto"
+              className="relative w-full max-w-[460px] bg-[#0c101b]/98 border border-zinc-850/60 rounded-3xl p-5 md:p-6 shadow-[0_20px_50px_rgba(0,0,0,0.95)] overflow-hidden text-center text-white z-55"
             >
               {/* SlamTiers style background subtle glow */}
-              <div className="absolute top-0 inset-x-0 h-40 bg-gradient-to-b from-purple-500/10 to-transparent pointer-events-none" />
+              <div className="absolute top-0 inset-x-0 h-32 bg-gradient-to-b from-purple-500/10 to-transparent pointer-events-none" />
               
               {/* Close Button */}
               <button
@@ -393,144 +846,139 @@ export function LeaderboardSection() {
               >
                 <X className="w-4 h-4" />
               </button>
-
-              {/* Square Minecraft Head Avatar display with glowing backdrop */}
-              <div className="relative mx-auto mt-4 mb-4 w-28 h-28 flex items-center justify-center select-none">
-                <div className={`absolute inset-0 blur-lg opacity-40 pointer-events-none ${
-                  searchResult.overallPoints >= 400 ? 'bg-amber-400' :
-                  searchResult.overallPoints >= 250 ? 'bg-fuchsia-500' :
-                  searchResult.overallPoints >= 100 ? 'bg-cyan-400' :
-                  'bg-purple-600'
-                }`} />
-                <div className={`relative w-24 h-24 rounded-none border-2 bg-zinc-950 flex items-center justify-center shrink-0 z-10 p-1.5 transition-transform duration-300 hover:scale-[1.03] ${
-                  searchResult.overallPoints >= 400 ? 'border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.25)]' :
-                  searchResult.overallPoints >= 250 ? 'border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.25)]' :
-                  searchResult.overallPoints >= 100 ? 'border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.2)]' :
-                  'border-zinc-750 shadow-[0_4px_12px_rgba(0,0,0,0.4)]'
-                }`}>
-                  <img
-                    src={`https://mc-heads.net/avatar/${searchResult.username}/100.png`}
-                    alt={`${searchResult.username}'s Head`}
-                    className="w-full h-full object-contain rounded-none"
-                    onError={(e) => {
-                      e.currentTarget.src = `https://minotar.net/helm/${searchResult.username}/100.png`;
-                    }}
-                    referrerPolicy="no-referrer"
-                  />
+              <div id="player-stats-card-capture" className="relative text-center w-full bg-[#0c101b] rounded-2xl p-1">
+                {/* Branding Header in high visual quality card */}
+                <div className="flex items-center justify-between mb-3.5 pb-2.5 border-b border-zinc-800/40">
+                  <div className="flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-purple-500 shadow-sm" />
+                    <span className="font-sans font-black text-[10px] tracking-wider text-zinc-300">SLAMTIERS COMPETITIVE</span>
+                  </div>
+                  <span className="text-[9px] font-mono text-zinc-450 uppercase tracking-widest bg-zinc-900 border border-zinc-800 px-2.5 py-0.5 rounded-lg font-bold">
+                    OFFICIAL RECORD
+                  </span>
                 </div>
-              </div>
 
-              <h3 className="font-display text-2.5xl font-black text-white tracking-wide">
-                {searchResult.username}
-              </h3>
-              
-              {/* Combat Title / Badge Pill */}
-              <div className="mt-2.5 flex justify-center">
-                <span className={`inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-bold font-mono tracking-wide shadow-sm border ${
-                  searchResult.overallPoints >= 400 ? 'bg-gradient-to-r from-amber-500/20 to-yellow-500/10 text-amber-200 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.25)]' :
-                  searchResult.overallPoints >= 250 ? 'bg-gradient-to-r from-purple-500/20 to-indigo-500/10 text-purple-200 border-purple-500/40 shadow-[0_0_12px_rgba(168,85,247,0.25)]' :
-                  searchResult.overallPoints >= 100 ? 'bg-gradient-to-r from-cyan-500/25 to-teal-500/10 text-cyan-200 border-cyan-500/40 shadow-[0_0_10px_rgba(34,211,238,0.2)]' :
-                  'bg-gradient-to-r from-zinc-800/40 to-zinc-900/20 text-zinc-350 border-zinc-800 shadow-[0_2px_5px_rgba(0,0,0,0.3)]'
-                }`}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-                  {searchResult.achievementTitle || 'Rookie Combatant'}
-                </span>
-              </div>
-              
-              {/* Optional Discord ID info (verified badge) */}
-              <div className="mt-3.5 flex justify-center">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-zinc-900/60 border border-zinc-850 rounded-xl text-xs font-mono text-zinc-450 select-none">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                  <span>ID: {searchResult.discordId || 'Verified'}</span>
-                </span>
-              </div>
+                <div className="relative mx-auto mt-2 mb-2 w-20 h-20 flex items-center justify-center select-none">
+                  <div className={`absolute inset-0 blur-md opacity-40 pointer-events-none ${
+                    searchResult.overallPoints >= 400 ? 'bg-amber-400' :
+                    searchResult.overallPoints >= 250 ? 'bg-fuchsia-500' :
+                    searchResult.overallPoints >= 100 ? 'bg-cyan-400' :
+                    'bg-purple-600'
+                  }`} />
+                  <div className={`relative w-18 h-18 rounded-none border-2 bg-zinc-950 flex items-center justify-center shrink-0 z-10 p-1 transition-transform duration-300 hover:scale-[1.03] ${
+                    searchResult.overallPoints >= 400 ? 'border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.25)]' :
+                    searchResult.overallPoints >= 250 ? 'border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.25)]' :
+                    searchResult.overallPoints >= 100 ? 'border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.2)]' :
+                    'border-zinc-750 shadow-[0_4px_12px_rgba(0,0,0,0.4)]'
+                  }`}>
+                    <img
+                      src={avatarBase64 || `https://mc-heads.net/avatar/${searchResult.username}/100.png`}
+                      alt={`${searchResult.username}'s Head`}
+                      className="w-full h-full object-contain rounded-none"
+                      crossOrigin="anonymous"
+                      onError={(e) => {
+                        e.currentTarget.src = `https://minotar.net/helm/${searchResult.username}/100.png`;
+                      }}
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                </div>
 
-              {/* Position Subsection */}
-              {(() => {
-                const rankIndex = data.findIndex(p => p.username?.toLowerCase() === searchResult.username?.toLowerCase());
-                const playerRank = rankIndex >= 0 ? rankIndex + 1 : null;
-                const pointsValue = activeTab === 'overall' ? searchResult.overallPoints : (searchResult.gamemodes?.[activeTab]?.points || 0);
-                const pointsLabel = 'PTS';
-                const tabTitle = VALID_GAMEMODES.find(g => g.id === activeTab)?.name || 'Overall';
+                <h3 className="font-display text-xl md:text-2xl font-black text-white tracking-wide">
+                  {searchResult.username}
+                </h3>
+                {/* Combat Title / Badge Pill */}
+                <div className="mt-2 flex justify-center">
+                  <span className={`inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-bold font-mono tracking-wide shadow-sm border ${getAchievementTitleStyles(searchResult.overallPoints)}`}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                    {searchResult.achievementTitle || 'Rookie Combatant'}
+                  </span>
+                </div>
+                
 
-                return (
-                  <div className="mt-6 text-left">
-                    <h4 className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-1.5 select-none font-semibold">
-                      Standing Position
-                    </h4>
-                    
-                    {/* POSITION BANNER */}
-                    <div className="relative flex items-stretch select-none h-11 w-full overflow-hidden rounded-xl border border-zinc-800/70 shadow-md">
-                      {/* Left Block - Slanted Yellow Rank indicator */}
-                      <div className="relative flex items-center justify-center bg-gradient-to-r from-amber-400 to-amber-500 px-5 text-zinc-950 font-sans italic font-black text-lg shadow-[inset_-2px_0_6px_rgba(0,0,0,0.15)] z-10 shrink-0">
-                        {playerRank ? `${playerRank}.` : 'N/A'}
-                        {/* Custom visual cut effect via absolute slant */}
-                        <div 
-                          className="absolute right-0 top-0 bottom-0 w-4 bg-amber-500 transform skew-x-[15deg] translate-x-1.5" 
-                          style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%, 0 0)' }}
-                        />
-                      </div>
+
+                {/* Position Subsection */}
+                {(() => {
+                  const rankIndex = data.findIndex(p => p.username?.toLowerCase() === searchResult.username?.toLowerCase());
+                  const playerRank = rankIndex >= 0 ? rankIndex + 1 : null;
+                  const pointsValue = activeTab === 'overall' ? searchResult.overallPoints : (searchResult.gamemodes?.[activeTab]?.points || 0);
+                  const pointsLabel = 'PTS';
+                  const tabTitle = VALID_GAMEMODES.find(g => g.id === activeTab)?.name || 'Overall';
+
+                  return (
+                    <div className="mt-4 text-left">
+                      <h4 className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-1.5 select-none font-semibold">
+                        Standing Position
+                      </h4>
                       
-                      {/* Right Block - Slate pill */}
-                      <div className="flex-grow flex items-center justify-between pl-5 pr-4 bg-[#111624] text-white">
-                        <div className="flex items-center gap-1.5">
-                          <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                          <span className="text-[11px] uppercase font-bold tracking-wider font-mono text-zinc-200">
-                            {tabTitle}
+                      {/* POSITION BANNER */}
+                      <div className="relative flex items-stretch select-none h-10 w-full overflow-hidden rounded-xl border border-zinc-800/70 shadow-md">
+                        {/* Left Block - Slanted Yellow Rank indicator */}
+                        <div className="relative flex items-center justify-center bg-gradient-to-r from-amber-400 to-amber-500 px-5 text-zinc-950 font-sans italic font-black text-base shadow-[inset_-2px_0_6px_rgba(0,0,0,0.15)] z-10 shrink-0">
+                          {playerRank ? `${playerRank}.` : 'N/A'}
+                          {/* Custom visual cut effect via absolute slant */}
+                          <div 
+                            className="absolute right-0 top-0 bottom-0 w-4 bg-amber-500 transform skew-x-[15deg] translate-x-1.5" 
+                            style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%, 0 0)' }}
+                          />
+                        </div>
+                        
+                        {/* Right Block - Slate pill */}
+                        <div className="flex-grow flex items-center justify-between pl-5 pr-4 bg-[#111624] text-white">
+                          <div className="flex items-center gap-1.5">
+                            <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                            <span className="text-[10px] uppercase font-bold tracking-wider font-mono text-zinc-200">
+                              {tabTitle}
+                            </span>
+                          </div>
+                          <span className="font-mono text-[11px] font-semibold text-zinc-400">
+                            (<span className="text-purple-400 font-bold">{pointsValue}</span> {pointsLabel})
                           </span>
                         </div>
-                        <span className="font-mono text-xs font-semibold text-zinc-400">
-                          (<span className="text-purple-400 font-bold">{pointsValue}</span> {pointsLabel})
-                        </span>
                       </div>
                     </div>
-                  </div>
-                );
-              })()}
+                  );
+                })()}
 
-              {/* Gamemodes Standings Subsection */}
-              <div className="mt-6 text-left">
-                <h4 className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2.5 select-none font-semibold">
-                  Gamemodes Record
-                </h4>
-                
-                <div className="bg-[#121622]/40 border border-zinc-800/60 rounded-2xl p-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    {VALID_GAMEMODES.filter(g => g.id !== 'overall').map((gm) => {
-                      const gmStat = searchResult.gamemodes?.[gm.id];
-                      const hasStat = !!gmStat && gmStat.tier && gmStat.tier !== 'NONE';
-                      const tier = hasStat ? gmStat.tier : 'UNRANKED';
-                      const pts = gmStat ? (gmStat.points !== undefined ? Number(gmStat.points) : 0) : 0;
-                      
-                      return (
-                        <div key={gm.id} className="flex items-center justify-between p-2 bg-zinc-950/40 border border-zinc-900/60 rounded-xl hover:border-zinc-850 transition-colors">
-                          <div className="flex items-center gap-2 max-w-[65%]">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center relative transition-all duration-300 shrink-0 ${
-                              hasStat 
-                                ? 'bg-zinc-900 border border-purple-500/20 shadow-[0_0_8px_rgba(168,85,247,0.1)]' 
-                                : 'bg-zinc-950/20 border border-zinc-950 text-zinc-700'
-                            }`} title={gm.name}>
-                              {getGamemodeIcon(gm.id)}
+                {/* Gamemodes Standings Subsection */}
+                <div className="mt-4 text-left">
+                  <h4 className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2 select-none font-semibold">
+                    Gamemodes Record
+                  </h4>
+                  
+                  <div className="bg-[#121622]/40 border border-zinc-800/60 rounded-2xl p-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      {VALID_GAMEMODES.filter(g => g.id !== 'overall').map((gm) => {
+                        const gmStat = searchResult.gamemodes?.[gm.id];
+                        const hasStat = !!gmStat && gmStat.tier && gmStat.tier !== 'NONE';
+                        const tier = hasStat ? gmStat.tier : 'UNRANKED';
+                        const pts = gmStat ? (gmStat.points !== undefined ? Number(gmStat.points) : 0) : 0;
+                        
+                        return (
+                          <div key={gm.id} className="flex items-center justify-between p-2 bg-zinc-950/40 border border-zinc-900/60 rounded-xl hover:border-zinc-850 transition-colors">
+                            <div className="flex items-center gap-2 max-w-[65%] pl-1">
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-[9.5px] font-sans font-bold text-zinc-300 leading-tight truncate">
+                                  {gm.name}
+                                </span>
+                                <span className="text-[8.5px] font-mono text-zinc-500 leading-none mt-0.5">
+                                  {pts > 0 ? `${pts} PTS` : '0 -'}
+                                </span>
+                              </div>
                             </div>
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-[10px] font-sans font-bold text-zinc-300 leading-tight truncate">
-                                {gm.name}
-                              </span>
-                              <span className="text-[9px] font-mono text-zinc-500 leading-none">
-                                {pts > 0 ? `${pts} PTS` : '0 PTS'}
-                              </span>
+                            
+                            <div className="shrink-0 leading-none">
+                              <TierBadge tier={tier} size="sm" />
                             </div>
                           </div>
-                          
-                          <div className="shrink-0 leading-none">
-                            <TierBadge tier={tier} size="sm" />
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
+
+
               
             </motion.div>
           </div>
@@ -622,70 +1070,68 @@ export function LeaderboardSection() {
                           <h4 className="text-xs font-normal text-zinc-300 leading-normal mb-2">
                             How to obtain <span className="underline decoration-purple-500/80 decoration-2 font-semibold text-white">Achievement Titles</span>:
                           </h4>
-                          
-                          <div className="flex items-start gap-2.5">
+                                                 <div className="flex items-start gap-2.5">
                             <span className="text-lg shrink-0">👑</span>
                             <div>
-                              <span className="text-xs font-bold text-amber-300 block">Combat Grandmaster</span>
+                              <span className="text-xs font-black bg-gradient-to-r from-yellow-300 via-amber-200 to-yellow-400 bg-clip-text text-transparent block">Combat Grandmaster</span>
                               <span className="text-[10px] text-zinc-400 block leading-normal">Obtained 400+ total points.</span>
-                              <span className="text-[9px] text-amber-500/80 font-mono tracking-wider uppercase font-semibold">Absolute Top Tier</span>
+                              <span className="text-[9px] text-amber-500/85 font-mono tracking-wider uppercase font-semibold">Absolute Top Tier</span>
                             </div>
                           </div>
 
                           <div className="flex items-start gap-2.5">
                             <span className="text-lg shrink-0">⚔️</span>
                             <div>
-                              <span className="text-xs font-bold text-purple-300 block">Combat Master</span>
+                              <span className="text-xs font-bold bg-gradient-to-r from-purple-300 via-fuchsia-250 to-indigo-300 bg-clip-text text-transparent block">Combat Master</span>
                               <span className="text-[10px] text-zinc-400 block leading-normal">Obtained 250+ total points.</span>
-                              <span className="text-[9px] text-purple-400/80 font-mono tracking-wider uppercase font-semibold">Elite Tier</span>
+                              <span className="text-[9px] text-purple-400/85 font-mono tracking-wider uppercase font-semibold">Elite Tier</span>
                             </div>
                           </div>
 
                           <div className="flex items-start gap-2.5">
                             <span className="text-lg shrink-0">💎</span>
                             <div>
-                              <span className="text-xs font-bold text-cyan-300 block">Combat Ace</span>
+                              <span className="text-xs font-bold bg-gradient-to-r from-cyan-300 via-sky-200 to-teal-300 bg-clip-text text-transparent block">Combat Ace</span>
                               <span className="text-[10px] text-zinc-400 block leading-normal">Obtained 100+ total points.</span>
-                              <span className="text-[9px] text-cyan-400/80 font-mono tracking-wider uppercase font-semibold">High Tier</span>
+                              <span className="text-[9px] text-cyan-400/85 font-mono tracking-wider uppercase font-semibold">High Tier</span>
                             </div>
                           </div>
 
                           <div className="flex items-start gap-2.5">
                             <span className="text-lg shrink-0">🔥</span>
                             <div>
-                              <span className="text-xs font-bold text-orange-300 block">Combat Specialist</span>
+                              <span className="text-xs font-bold bg-gradient-to-r from-orange-400 via-amber-300 to-red-400 bg-clip-text text-transparent block">Combat Specialist</span>
                               <span className="text-[10px] text-zinc-400 block leading-normal">Obtained 50+ total points.</span>
-                              <span className="text-[9px] text-orange-400/80 font-mono tracking-wider uppercase font-semibold">Mid Tier</span>
+                              <span className="text-[9px] text-orange-400/85 font-mono tracking-wider uppercase font-semibold">Mid Tier</span>
                             </div>
                           </div>
 
                           <div className="flex items-start gap-2.5">
                             <span className="text-lg shrink-0">🛡️</span>
                             <div>
-                              <span className="text-xs font-bold text-indigo-300 block">Combat Cadet</span>
+                              <span className="text-xs font-bold bg-gradient-to-r from-blue-300 via-indigo-200 to-violet-300 bg-clip-text text-transparent block">Combat Cadet</span>
                               <span className="text-[10px] text-zinc-400 block leading-normal">Obtained 20+ total points.</span>
-                              <span className="text-[9px] text-indigo-400/80 font-mono tracking-wider uppercase font-semibold">Novice Tier</span>
+                              <span className="text-[9px] text-indigo-400/85 font-mono tracking-wider uppercase font-semibold">Novice Tier</span>
                             </div>
                           </div>
 
                           <div className="flex items-start gap-2.5">
                             <span className="text-lg shrink-0">🎯</span>
                             <div>
-                              <span className="text-xs font-bold text-red-300 block">Combat Novice</span>
+                              <span className="text-xs font-bold bg-gradient-to-r from-rose-300 via-pink-200 to-red-300 bg-clip-text text-transparent block">Combat Novice</span>
                               <span className="text-[10px] text-zinc-400 block leading-normal">Obtained 10+ total points.</span>
-                              <span className="text-[9px] text-red-400/80 font-mono tracking-wider uppercase font-semibold">Beginner Tier</span>
+                              <span className="text-[9px] text-red-400/85 font-mono tracking-wider uppercase font-semibold">Beginner Tier</span>
                             </div>
                           </div>
 
                           <div className="flex items-start gap-2.5 pt-1 border-t border-zinc-900">
                             <span className="text-lg shrink-0">🪵</span>
                             <div>
-                              <span className="text-xs font-bold text-zinc-350 block">Rookie</span>
+                              <span className="text-xs font-bold text-zinc-400 block">Rookie</span>
                               <span className="text-[10px] text-zinc-400 block leading-normal">Under 10 Points.</span>
-                              <span className="text-[9px] text-zinc-500 font-mono tracking-wider uppercase">Unranked / Starting Tier</span>
+                              <span className="text-[9px] text-zinc-550 font-mono tracking-wider uppercase">Unranked / Starting Tier</span>
                             </div>
                           </div>
-
                         </div>
                       ) : (
                         <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1">
@@ -897,7 +1343,6 @@ export function LeaderboardSection() {
 
                                       <div className="flex flex-col">
                                         <span className="font-semibold text-white tracking-wide hover:text-purple-400 transition-colors duration-150">{player.username}</span>
-                                        <span className="text-[10px] font-mono text-zinc-500 font-medium">ID: {player.discordId}</span>
                                       </div>
                                     </div>
                                   </td>
@@ -906,15 +1351,7 @@ export function LeaderboardSection() {
                                     <>
                                       {/* Title Column */}
                                       <td className="py-4.5 px-6 text-center">
-                                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-sm border ${
-                                          player.totalPoints >= 400 ? 'bg-gradient-to-r from-amber-500/20 to-yellow-500/10 text-amber-200 border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.15)]' :
-                                          player.totalPoints >= 250 ? 'bg-gradient-to-r from-purple-500/20 to-indigo-500/10 text-purple-200 border-purple-500/40 shadow-[0_0_10px_rgba(168,85,247,0.15)]' :
-                                          player.totalPoints >= 100 ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/30' :
-                                          player.totalPoints >= 50 ? 'bg-orange-500/15 text-orange-300 border border-orange-500/30' :
-                                          player.totalPoints >= 20 ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30' :
-                                          player.totalPoints >= 10 ? 'bg-red-500/15 text-red-300 border border-red-500/30' :
-                                          'bg-zinc-800/40 text-zinc-400 border border-zinc-800/80'
-                                        }`}>
+                                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-sm border ${getAchievementTitleStyles(player.totalPoints)}`}>
                                           {player.achievementTitle}
                                         </span>
                                       </td>
@@ -992,6 +1429,334 @@ export function LeaderboardSection() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Dynamic Discord Bot Developer & Simulator Hub Modal */}
+      <AnimatePresence>
+        {showBotHubModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowBotHubModal(false)}
+              className="absolute inset-0 bg-black/90 backdrop-blur-md cursor-pointer"
+            />
+
+            {/* Modal Body */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              className="relative w-full max-w-4xl bg-[#0a0e1a] border border-zinc-800/80 rounded-2xl md:rounded-3xl p-6 md:p-8 shadow-[0_25px_60px_rgba(0,0,0,0.95)] max-h-[92vh] overflow-y-auto z-10 select-none custom-scroll"
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => setShowBotHubModal(false)}
+                className="absolute top-5 right-5 p-2 rounded-full bg-zinc-900/60 hover:bg-zinc-850 hover:text-white text-zinc-400 border border-zinc-850/60 transition-all cursor-pointer z-10"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              {/* Branding Header */}
+              <div className="flex flex-col gap-1 mb-6 pb-4 border-b border-zinc-900/85">
+                <div className="flex items-center gap-2">
+                  <Bot className="w-6 h-6 text-purple-400" />
+                  <span className="font-display font-black text-lg md:text-xl text-white tracking-tight uppercase">SlamTiers Bot Developer Hub</span>
+                </div>
+                <p className="text-zinc-400 font-sans text-xs">
+                  Connect your discord bot to dynamically synchronize and publish tournament/combat rankings on this leaderboard in real-time.
+                </p>
+              </div>
+
+              {/* Grid: Left setup block, Right sandbox simulator */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                
+                {/* LEFT COLUMN: Setup details (span 7) */}
+                <div className="lg:col-span-7 space-y-5">
+                  <div className="flex items-center gap-2 mb-2 text-xs font-bold font-mono text-purple-300 uppercase tracking-widest">
+                    <Code className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Bot REST API Credentials</span>
+                  </div>
+
+                  {/* REST URL Input Group */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider font-semibold block text-left">
+                      API Entry Route (POST)
+                    </label>
+                    <div className="flex items-stretch p-1 bg-zinc-950/80 border border-zinc-900 rounded-xl">
+                      <input
+                        type="text"
+                        readOnly
+                        value={`${window.location.origin}/api/promote`}
+                        className="flex-grow pl-3 text-xs font-mono text-zinc-300 bg-transparent select-all outline-none"
+                      />
+                      <button
+                        onClick={copyEndpoint}
+                        className="px-3.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-850 text-xs font-semibold text-zinc-200 transition-colors cursor-pointer flex items-center gap-1.5 border border-zinc-800 shrink-0"
+                      >
+                        {copiedEndpoint ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedEndpoint ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Secret Token Group */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider font-semibold block text-left">
+                      Authorization Bearer Token
+                    </label>
+                    <div className="flex items-stretch p-1 bg-zinc-950/80 border border-zinc-900 rounded-xl">
+                      <input
+                        type="password"
+                        readOnly
+                        value="A@V>Wr]qs~_,?6E#*L9)2=4dXxc4PNdE"
+                        className="flex-grow pl-3 text-xs font-mono text-zinc-400 bg-transparent select-all outline-none"
+                      />
+                      <button
+                        onClick={copyToken}
+                        className="px-3.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-850 text-xs font-semibold text-zinc-200 transition-colors cursor-pointer flex items-center gap-1.5 border border-zinc-800 shrink-0"
+                      >
+                        {copiedToken ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedToken ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+                    <span className="text-[9px] font-mono text-zinc-500 block text-left">Matches credentials configured inside the active server instance.</span>
+                  </div>
+
+                  {/* REST Boilerplate Scripts tab and snippet */}
+                  <div className="space-y-2 pt-2">
+                    <div className="flex items-center justify-between border-b border-zinc-900 pb-1.5">
+                      <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider font-semibold block">
+                        Quick Integration Snippet
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setBotLanguage('node')}
+                          className={`text-[10px] font-mono px-2 py-0.5 rounded-md font-bold transition-all ${
+                            botLanguage === 'node' ? 'bg-purple-600/20 text-purple-300 border border-purple-500/35' : 'text-zinc-500 hover:text-zinc-350'
+                          }`}
+                        >
+                          NodeJS
+                        </button>
+                        <button
+                          onClick={() => setBotLanguage('python')}
+                          className={`text-[10px] font-mono px-2 py-0.5 rounded-md font-bold transition-all ${
+                            botLanguage === 'python' ? 'bg-purple-600/20 text-purple-300 border border-purple-500/35' : 'text-zinc-500 hover:text-zinc-350'
+                          }`}
+                        >
+                          Python
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-zinc-950/90 border border-zinc-900 rounded-xl overflow-x-auto text-[10.5px] font-mono text-zinc-300 select-all max-h-[175px] custom-scroll leading-relaxed text-left">
+                      {botLanguage === 'node' ? (
+                        <pre>{`// Discord.js event receiver boilerplate
+const response = await fetch(\`${window.location.origin}/api/promote\`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer A@V>Wr]qs~_,?6E#*L9)2=4dXxc4PNdE'
+  },
+  body: JSON.stringify({
+    discordId: "731320713892742918",
+    username: "Steve", 
+    gamemode: "sword", // sword, mace, diapot etc
+    tier: "HT2",       // HT1 to LT5
+    points: 30
+  })
+});
+
+const data = await response.json();
+console.log('Update result:', data.success);`}</pre>
+                      ) : (
+                        <pre>{`# discord.py client task boilerplate
+import requests
+
+url = "${window.location.origin}/api/promote"
+headers = {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer A@V>Wr]qs~_,?6E#*L9)2=4dXxc4PNdE"
+}
+payload = {
+    "discordId": "731320713892742918",
+    "username": "Steve",
+    "gamemode": "sword",
+    "tier": "HT2",
+    "points": 30
+}
+
+r = requests.post(url, json=payload, headers=headers)
+print("Synchronization result:", r.json())`}</pre>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Schema Info */}
+                  <div className="p-3 bg-zinc-950/30 border border-zinc-900/60 rounded-xl text-left">
+                    <h5 className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-bold mb-1 flex items-center gap-1.5">
+                      <Cpu className="w-3.5 h-3.5 text-zinc-450" />
+                      <span>Validation Requirements</span>
+                    </h5>
+                    <ul className="text-[10.5px] text-zinc-400 space-y-1 list-disc pl-3.5 leading-relaxed">
+                      <li><span className="font-semibold text-zinc-300">discordId:</span> Valid Discord User Snowflake identifier string.</li>
+                      <li><span className="font-semibold text-zinc-300">username:</span> Player Minecraft IGN case-sensitive name.</li>
+                      <li><span className="font-semibold text-zinc-300">gamemode:</span> sword, mace, diapot, nethpot, smp, builduhc, axe, crystal.</li>
+                      <li><span className="font-semibold text-zinc-300">tier:</span> HT1, LT1, HT2, LT2, HT3, LT3, HT4, LT4, HT5, LT5.</li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* RIGHT COLUMN: Simulator Form (span 5) */}
+                <div className="lg:col-span-5 bg-zinc-950/40 border border-zinc-900 p-5 rounded-2xl md:rounded-3xl relative">
+                  <div className="flex items-center gap-2 mb-4 text-xs font-bold font-mono text-purple-300 uppercase tracking-widest">
+                    <Terminal className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+                    <span>Live Bot Sandbox Test</span>
+                  </div>
+
+                  <p className="text-[11px] text-zinc-400 leading-normal mb-4 text-left">
+                    Send a test payload to proof-verify the express backend routing. The record updates Firestore dynamically!
+                  </p>
+
+                  <form onSubmit={handleSimulateBotRequest} className="space-y-4">
+                    
+                    {/* Minecraft IGN Input */}
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-mono text-zinc-400 uppercase tracking-wider font-semibold block text-left">Minecraft Username</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Steve"
+                        value={simUsername}
+                        onChange={(e) => setSimUsername(e.target.value)}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-900 focus:border-purple-600/80 rounded-xl text-xs text-white outline-none"
+                      />
+                    </div>
+
+                    {/* Discord Snowflake ID Input */}
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-mono text-zinc-400 uppercase tracking-wider font-semibold block text-left">Discord User Snowflake ID</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 731320713892742918"
+                        value={simDiscordId}
+                        onChange={(e) => setSimDiscordId(e.target.value)}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-900 focus:border-purple-600/80 rounded-xl text-xs text-white outline-none font-mono"
+                      />
+                    </div>
+
+                    {/* Two Columns: gamemode and Tier */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-mono text-zinc-400 uppercase tracking-wider font-semibold block text-left">Gamemode</label>
+                        <select
+                          value={simGamemode}
+                          onChange={(e) => setSimGamemode(e.target.value)}
+                          className="w-full px-2 py-2 bg-zinc-950 border border-zinc-900 focus:border-purple-600/80 rounded-xl text-xs text-white outline-none"
+                        >
+                          <option value="sword">Sword</option>
+                          <option value="mace">Mace</option>
+                          <option value="diapot">Diamond Pot</option>
+                          <option value="nethpot">Netherite Pot</option>
+                          <option value="smp">SMP</option>
+                          <option value="builduhc">Build UHC</option>
+                          <option value="axe">Axe</option>
+                          <option value="crystal">Crystal</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-mono text-zinc-400 uppercase tracking-wider font-semibold block text-left">Tier</label>
+                        <select
+                          value={simTier}
+                          onChange={(e) => {
+                            const selectedTier = e.target.value;
+                            setSimTier(selectedTier);
+                            // Auto map correct points helper
+                            const pointsMap: Record<string, string> = {
+                              'HT1': '60', 'LT1': '40',
+                              'HT2': '30', 'LT2': '25',
+                              'HT3': '20', 'LT3': '15',
+                              'HT4': '12', 'LT4': '8',
+                              'HT5': '5',  'LT5': '2'
+                            };
+                            setSimPoints(pointsMap[selectedTier] || '0');
+                          }}
+                          className="w-full px-2 py-2 bg-zinc-950 border border-zinc-900 focus:border-purple-600/80 rounded-xl text-xs text-white outline-none"
+                        >
+                          <option value="HT1">HT1</option>
+                          <option value="LT1">LT1</option>
+                          <option value="HT2">HT2</option>
+                          <option value="LT2">LT2</option>
+                          <option value="HT3">HT3</option>
+                          <option value="LT3">LT3</option>
+                          <option value="HT4">HT4</option>
+                          <option value="LT4">LT4</option>
+                          <option value="HT5">HT5</option>
+                          <option value="LT5">LT5</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Numeric Points Input */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center bg-transparent">
+                        <label className="text-[9px] font-mono text-zinc-400 uppercase tracking-wider font-semibold block text-left">XP Points Contributed</label>
+                        <span className="text-[9px] font-mono text-purple-400">Mapped: {simPoints} PTS</span>
+                      </div>
+                      <input
+                        type="number"
+                        required
+                        value={simPoints}
+                        onChange={(e) => setSimPoints(e.target.value)}
+                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-900 focus:border-purple-600/80 rounded-xl text-xs text-white outline-none font-mono text-left"
+                      />
+                    </div>
+
+                    {/* Feedback Messages */}
+                    {simSuccess && (
+                      <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/40 text-green-400 text-xs font-mono select-text flex flex-col gap-1 text-left">
+                        <span className="font-bold text-green-300">✓ TEST SUCCESS</span>
+                        <span>{simSuccess}</span>
+                      </div>
+                    )}
+
+                    {simError && (
+                      <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/40 text-red-400 text-xs font-mono select-text flex flex-col gap-1 text-left">
+                        <span className="font-bold text-red-300">⚠ TEST FAILED</span>
+                        <span>{simError}</span>
+                      </div>
+                    )}
+
+                    {/* Sandbox Submit Button */}
+                    <button
+                      type="submit"
+                      disabled={simLoading}
+                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-550 hover:to-indigo-550 disabled:opacity-50 text-white font-bold text-xs tracking-wider uppercase transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      {simLoading ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Dispatching POST Payload...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Terminal className="w-3.5 h-3.5" />
+                          <span>⚡ Dispatch Simulated Bot Request</span>
+                        </>
+                      )}
+                    </button>
+
+                  </form>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }
